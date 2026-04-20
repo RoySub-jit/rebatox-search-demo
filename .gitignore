@@ -1,0 +1,24 @@
+.DS_Store
+.env
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.venv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# IDEs
+.idea/
+.vscode/
+
+# Docker
+postgres_data/
