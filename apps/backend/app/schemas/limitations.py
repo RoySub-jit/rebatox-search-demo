@@ -17,6 +17,7 @@ LimitationSeverity = Literal["low", "medium", "high"]
 
 class GeneratedLimitation(BaseModel):
     limitation_type: LimitationType
+    title: str
     description: str
     severity: LimitationSeverity
     why_it_matters: str

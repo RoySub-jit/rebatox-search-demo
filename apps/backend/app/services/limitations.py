@@ -124,9 +124,12 @@ class RuleBasedLimitationGenerator:
     def generate(
         self,
         *,
-        study: Study,
-        candidate_pod: CandidatePOD,
+        study: Study | None,
+        candidate_pod: CandidatePOD | None,
     ) -> list[GeneratedLimitation]:
+        if study is None or candidate_pod is None:
+            return []
+
         context = _build_context(study=study, candidate_pod=candidate_pod)
         limitations: list[GeneratedLimitation] = []
 
@@ -134,6 +137,7 @@ class RuleBasedLimitationGenerator:
             limitations.append(
                 GeneratedLimitation(
                     limitation_type="missing_route",
+                    title="Missing route",
                     description=(
                         "Route of administration is not explicit across the study and candidate POD fields."
                     ),
@@ -152,6 +156,7 @@ class RuleBasedLimitationGenerator:
             limitations.append(
                 GeneratedLimitation(
                     limitation_type="missing_species_relevance",
+                    title="Missing species relevance",
                     description=(
                         "Species relevance is not explicit in the study or candidate POD justification."
                     ),
@@ -170,6 +175,7 @@ class RuleBasedLimitationGenerator:
             limitations.append(
                 GeneratedLimitation(
                     limitation_type="no_explicit_pod",
+                    title="No explicit POD",
                     description=(
                         "The candidate POD text does not name an explicit point of departure."
                     ),
@@ -188,6 +194,7 @@ class RuleBasedLimitationGenerator:
             limitations.append(
                 GeneratedLimitation(
                     limitation_type="sparse_dose_context",
+                    title="Sparse dose context",
                     description=(
                         "Dose context is too thin to confidently interpret the candidate POD."
                     ),
@@ -210,6 +217,7 @@ class RuleBasedLimitationGenerator:
             limitations.append(
                 GeneratedLimitation(
                     limitation_type="analog_only_evidence",
+                    title="Analog-only evidence",
                     description=(
                         "The current support appears to rely on analog, bridge, or read-across evidence."
                     ),
@@ -269,6 +277,7 @@ class RuleBasedLimitationGenerator:
 
         return GeneratedLimitation(
             limitation_type="low_confidence_extraction",
+            title="Low extraction confidence",
             description=(
                 "The candidate POD extraction confidence is low enough to warrant explicit review."
             ),
@@ -285,8 +294,8 @@ class RuleBasedLimitationGenerator:
 
 def generate_rule_based_limitations(
     *,
-    study: Study,
-    candidate_pod: CandidatePOD,
+    study: Study | None,
+    candidate_pod: CandidatePOD | None,
 ) -> list[GeneratedLimitation]:
     return RuleBasedLimitationGenerator().generate(
         study=study,
