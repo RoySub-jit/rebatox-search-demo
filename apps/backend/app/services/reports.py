@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
+import re
 from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -36,6 +37,8 @@ from app.schemas.reports import (
     SuggestedExperimentItem,
     SuggestedNextExperimentsSection,
 )
+from app.schemas.comparator_scoring import ComparatorScoringInput
+from app.services.comparator_scoring import score_comparator
 from app.services.limitations import generate_rule_based_limitations
 
 LIMITATION_EXPERIMENT_MAP: dict[str, tuple[str, str, str]] = {
@@ -68,6 +71,29 @@ LIMITATION_EXPERIMENT_MAP: dict[str, tuple[str, str, str]] = {
         "Generate direct product-specific confirmatory evidence",
         "Direct evidence would reduce dependence on analog or bridge assumptions in the report narrative.",
         "high",
+    ),
+}
+
+COMPARATOR_SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {
+    "same_target": re.compile(
+        r"\b(same[_ -]?target|target[- ]matched|target[- ]aligned)\b",
+        re.IGNORECASE,
+    ),
+    "same_modality": re.compile(
+        r"\b(same[_ -]?modality|matched modality|shared modality)\b",
+        re.IGNORECASE,
+    ),
+    "same_route": re.compile(
+        r"\b(same[_ -]?route|route[- ]matched|route[- ]aligned)\b",
+        re.IGNORECASE,
+    ),
+    "same_indication": re.compile(
+        r"\b(same[_ -]?indication|indication[- ]matched|shared indication)\b",
+        re.IGNORECASE,
+    ),
+    "same_scaffold": re.compile(
+        r"\b(same[_ -]?scaffold|shared scaffold|same backbone)\b",
+        re.IGNORECASE,
     ),
 }
 
@@ -237,6 +263,29 @@ def _titleize_identifier(identifier: str) -> str:
     return identifier.replace("_", " ").title()
 
 
+def _build_comparator_scoring_input(comparator: Comparator) -> ComparatorScoringInput:
+    comparator_text = " ".join(
+        part.strip()
+        for part in (comparator.name, comparator.category, comparator.description)
+        if part and part.strip()
+    )
+
+    return ComparatorScoringInput(
+        comparator_name=comparator.name,
+        same_target=bool(COMPARATOR_SIGNAL_PATTERNS["same_target"].search(comparator_text)),
+        same_modality=bool(COMPARATOR_SIGNAL_PATTERNS["same_modality"].search(comparator_text)),
+        same_route=bool(COMPARATOR_SIGNAL_PATTERNS["same_route"].search(comparator_text)),
+        same_indication=bool(
+            COMPARATOR_SIGNAL_PATTERNS["same_indication"].search(comparator_text)
+        ),
+        same_scaffold=bool(COMPARATOR_SIGNAL_PATTERNS["same_scaffold"].search(comparator_text)),
+    )
+
+
+def _normalize_limitation_key(title: str) -> str:
+    return title.strip().lower().replace("-", "_").replace(" ", "_")
+
+
 def _why_it_matters_for_persisted_limitation(limitation: Limitation) -> str:
     if limitation.finding is not None:
         return (
@@ -357,18 +406,22 @@ def _build_comparator_summary(product: Product) -> ComparatorSummarySection:
             _citations_for_candidate_pod(candidate_pod)
         )
 
-    items = [
-        ComparatorSummaryItem(
-            comparator_id=comparator.id,
-            name=comparator.name,
-            category=comparator.category,
-            description=comparator.description,
-            linked_study_count=study_counts[comparator.id],
-            linked_candidate_pod_count=candidate_counts[comparator.id],
-            citations=_dedupe_citations(comparator_citations[comparator.id]),
+    items: list[ComparatorSummaryItem] = []
+    for comparator in sorted(comparator_map.values(), key=lambda item: item.name.lower()):
+        comparator_score = score_comparator(_build_comparator_scoring_input(comparator))
+        items.append(
+            ComparatorSummaryItem(
+                comparator_id=comparator.id,
+                name=comparator.name,
+                category=comparator.category,
+                description=comparator.description,
+                relevance_score=comparator_score.relevance_score,
+                relevance_rationale=comparator_score.rationale,
+                linked_study_count=study_counts[comparator.id],
+                linked_candidate_pod_count=candidate_counts[comparator.id],
+                citations=_dedupe_citations(comparator_citations[comparator.id]),
+            )
         )
-        for comparator in sorted(comparator_map.values(), key=lambda item: item.name.lower())
-    ]
 
     item_citations = [citation for item in items for citation in item.citations]
 
@@ -492,7 +545,7 @@ def _build_limitations(product: Product) -> LimitationsSection:
             items.append(
                 ReportLimitationItem(
                     source="generated",
-                    title=_titleize_identifier(generated.limitation_type),
+                    title=generated.title,
                     description=generated.description,
                     severity=generated.severity,
                     why_it_matters=generated.why_it_matters,
@@ -557,7 +610,7 @@ def _build_suggested_next_experiments(
         if limitation.source != "generated":
             continue
 
-        limitation_key = limitation.title.lower().replace(" ", "_")
+        limitation_key = _normalize_limitation_key(limitation.title)
         experiment_template = LIMITATION_EXPERIMENT_MAP.get(limitation_key)
         if experiment_template is None:
             continue

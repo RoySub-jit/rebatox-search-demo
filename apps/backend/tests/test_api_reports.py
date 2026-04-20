@@ -189,6 +189,188 @@ def _build_partial_report_data_without_optional_sections(db_session):
     return product
 
 
+def _build_bare_product(db_session):
+    product = Product(
+        name="Bare Product",
+        slug="bare-product",
+    )
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+    return product
+
+
+def _build_strong_comparator_report_data(db_session):
+    product = Product(
+        name="Biologic Prime",
+        slug="biologic-prime",
+        manufacturer="Example Labs",
+    )
+    comparator = Comparator(
+        name="Reference Alpha",
+        slug="reference-alpha",
+        category="same_target same_modality",
+        description=(
+            "same_route same_indication same_scaffold comparator with strong biologic alignment."
+        ),
+    )
+    source_document = SourceDocument(
+        title="Comparator Dossier 11",
+        document_type="assessment_report",
+        source_uri="https://example.test/comparator-dossier-11",
+    )
+    chunk_text = (
+        "Adult patients received oral dosing for 28 days, and the NOAEL of 5 mg/kg/day "
+        "was retained with documented human relevance."
+    )
+    document_chunk = DocumentChunk(
+        source_document=source_document,
+        chunk_index=0,
+        content=chunk_text,
+        page_number_start=8,
+        page_number_end=8,
+    )
+    study = Study(
+        product=product,
+        comparator=comparator,
+        source_document=source_document,
+        title="Reference alignment study",
+        objective=(
+            "Evaluate oral dosing and confirm a NOAEL across 5 mg/kg/day and 15 mg/kg/day groups."
+        ),
+        study_design="Repeat-dose clinical study",
+        population="Adult patients with documented human relevance.",
+        status="complete",
+        published_at=datetime(2024, 5, 10, tzinfo=timezone.utc),
+    )
+    finding = Finding(
+        study=study,
+        title="Reference alignment",
+        summary="Comparator-aligned exposure supports the selected NOAEL.",
+        finding_type="supportive",
+        evidence_direction="supportive",
+        effect_estimate=Decimal("1.10"),
+    )
+    citation_span = CitationSpan(
+        finding=finding,
+        document_chunk=document_chunk,
+        start_offset=0,
+        end_offset=len(chunk_text),
+        quoted_text=chunk_text,
+        label="comparator_alignment",
+    )
+    candidate_pod = CandidatePOD(
+        product=product,
+        comparator=comparator,
+        finding=finding,
+        title="Reference NOAEL candidate",
+        claim_text="NOAEL of 5 mg/kg/day selected from the oral study.",
+        rationale="Human relevance is documented and the oral route is aligned for review.",
+        status="confirmed",
+        confidence_score=Decimal("0.93"),
+    )
+
+    db_session.add_all(
+        [
+            product,
+            comparator,
+            source_document,
+            document_chunk,
+            study,
+            finding,
+            citation_span,
+            candidate_pod,
+        ]
+    )
+    db_session.commit()
+    db_session.refresh(product)
+
+    return product
+
+
+def _build_weak_comparator_report_data(db_session):
+    product = Product(
+        name="Bridge Candidate",
+        slug="bridge-candidate",
+        manufacturer="Example Labs",
+    )
+    comparator = Comparator(
+        name="Reference Gamma",
+        slug="reference-gamma",
+        category="bridge_reference",
+        description="same_scaffold comparator with limited bridge support.",
+    )
+    source_document = SourceDocument(
+        title="Bridge Memo 7",
+        document_type="assessment_report",
+        source_uri="https://example.test/bridge-memo-7",
+    )
+    chunk_text = (
+        "Rat bridge study summary relying on read-across support from an analog compound."
+    )
+    document_chunk = DocumentChunk(
+        source_document=source_document,
+        chunk_index=0,
+        content=chunk_text,
+        page_number_start=2,
+        page_number_end=2,
+    )
+    study = Study(
+        product=product,
+        comparator=comparator,
+        source_document=source_document,
+        title="Bridge toxicology assessment",
+        objective="Summarize support from a rat bridge study.",
+        study_design="Toxicology bridge study",
+        population="Rat model",
+        status="complete",
+        published_at=datetime(2024, 6, 12, tzinfo=timezone.utc),
+    )
+    finding = Finding(
+        study=study,
+        title="Bridge-only support",
+        summary="Current support depends on analog bridge evidence.",
+        finding_type="supportive",
+        evidence_direction="uncertain",
+        effect_estimate=Decimal("0.40"),
+    )
+    citation_span = CitationSpan(
+        finding=finding,
+        document_chunk=document_chunk,
+        start_offset=0,
+        end_offset=len(chunk_text),
+        quoted_text=chunk_text,
+        label="bridge_support",
+    )
+    candidate_pod = CandidatePOD(
+        product=product,
+        comparator=comparator,
+        finding=finding,
+        title="Bridge support candidate",
+        claim_text="Selected from the bridge study findings.",
+        rationale="Read-across from an analog compound supports the current selection.",
+        status="provisional",
+        confidence_score=Decimal("0.25"),
+    )
+
+    db_session.add_all(
+        [
+            product,
+            comparator,
+            source_document,
+            document_chunk,
+            study,
+            finding,
+            citation_span,
+            candidate_pod,
+        ]
+    )
+    db_session.commit()
+    db_session.refresh(product)
+
+    return product
+
+
 def test_get_product_report_returns_structured_sections_with_citations(client, db_session):
     product = _build_seeded_report_data(db_session)
 
@@ -283,6 +465,85 @@ def test_get_product_report_returns_empty_section_shapes_for_missing_optional_re
     assert payload["expert_review_section"] == {
         "review_count": 0,
         "average_score": None,
+        "items": [],
+        "citations": [],
+    }
+
+
+def test_get_product_report_integrates_strong_comparator_and_no_limitations(
+    client,
+    db_session,
+):
+    product = _build_strong_comparator_report_data(db_session)
+
+    response = client.get(f"/api/v1/reports/{product.id}")
+
+    assert response.status_code == 200
+
+    payload = response.json()
+    comparator_item = payload["comparator_summary"]["items"][0]
+
+    assert comparator_item["name"] == "Reference Alpha"
+    assert comparator_item["relevance_score"] == 100.0
+    assert "strong comparator match" in comparator_item["relevance_rationale"]
+    assert payload["limitations"] == {
+        "items": [],
+        "citations": [],
+    }
+
+
+def test_get_product_report_integrates_weak_comparator_and_multiple_limitations(
+    client,
+    db_session,
+):
+    product = _build_weak_comparator_report_data(db_session)
+
+    response = client.get(f"/api/v1/reports/{product.id}")
+
+    assert response.status_code == 200
+
+    payload = response.json()
+    comparator_item = payload["comparator_summary"]["items"][0]
+    limitation_titles = {item["title"] for item in payload["limitations"]["items"]}
+
+    assert comparator_item["name"] == "Reference Gamma"
+    assert comparator_item["relevance_score"] == 5.0
+    assert "weak comparator match" in comparator_item["relevance_rationale"]
+    assert limitation_titles == {
+        "Missing route",
+        "Missing species relevance",
+        "No explicit POD",
+        "Sparse dose context",
+        "Analog-only evidence",
+        "Low extraction confidence",
+    }
+
+
+def test_get_product_report_handles_no_comparator_and_no_study_data(
+    client,
+    db_session,
+):
+    product = _build_bare_product(db_session)
+
+    response = client.get(f"/api/v1/reports/{product.id}")
+
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["product_id"] == product.id
+    assert payload["product_overview"]["study_count"] == 0
+    assert payload["comparator_summary"] == {
+        "items": [],
+        "citations": [],
+    }
+    assert payload["evidence_summary"] == {
+        "study_count": 0,
+        "finding_count": 0,
+        "studies": [],
+        "findings": [],
+        "citations": [],
+    }
+    assert payload["limitations"] == {
         "items": [],
         "citations": [],
     }

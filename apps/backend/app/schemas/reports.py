@@ -35,6 +35,8 @@ class ComparatorSummaryItem(BaseModel):
     name: str
     category: str | None = None
     description: str | None = None
+    relevance_score: float
+    relevance_rationale: str
     linked_study_count: int
     linked_candidate_pod_count: int
     citations: list[ReportCitation] = Field(default_factory=list)
