@@ -1,4 +1,5 @@
 import type {
+  ExpertReviewItemResponse,
   ProductReportResponse,
   ReportCitationResponse,
 } from "@/lib/api";
@@ -37,6 +38,13 @@ export type CitationPanelModel = {
   tone: ReviewTone;
   entityLabel?: string;
   fieldLabel?: string;
+};
+
+export type CandidatePodReviewState = {
+  latestReview: ExpertReviewItemResponse | null;
+  history: ExpertReviewItemResponse[];
+  overrideApplied: boolean;
+  reviewResolved: boolean;
 };
 
 type CitationPanelOptions = {
@@ -218,6 +226,46 @@ export function buildReviewMetrics(
       tone: blockingLimitationCount > 0 ? "danger" : "success",
     },
   ];
+}
+
+export function getExpertReviewHistoryForCandidatePod(
+  reviews: ExpertReviewItemResponse[],
+  candidatePodId: number,
+): ExpertReviewItemResponse[] {
+  return reviews.filter(
+    (review) => review.linked_candidate_pod_id === candidatePodId,
+  );
+}
+
+export function hasExpertOverride(review: ExpertReviewItemResponse | null): boolean {
+  if (!review) {
+    return false;
+  }
+
+  return (
+    review.override_support_category !== null ||
+    review.override_support_score !== null ||
+    review.accepted_current_assessment ||
+    review.expert_review_required_resolved
+  );
+}
+
+export function getCandidatePodReviewState(
+  report: ProductReportResponse,
+  candidatePodId: number,
+): CandidatePodReviewState {
+  const history = getExpertReviewHistoryForCandidatePod(
+    report.expert_review_section.items,
+    candidatePodId,
+  );
+  const latestReview = history[0] ?? null;
+
+  return {
+    latestReview,
+    history,
+    overrideApplied: hasExpertOverride(latestReview),
+    reviewResolved: latestReview?.expert_review_required_resolved ?? false,
+  };
 }
 
 export function formatPageRange(citation: ReportCitationResponse): string {

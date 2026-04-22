@@ -53,7 +53,13 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
 
   try {
     const report = await getProductReport(appConfig.apiBaseUrl, productId);
-    return <ReportReviewWorkspace productId={productId} report={report} />;
+    return (
+      <ReportReviewWorkspace
+        apiBaseUrl={appConfig.apiBaseUrl}
+        productId={productId}
+        report={report}
+      />
+    );
   } catch (error) {
     return (
       <div className="page-stack">

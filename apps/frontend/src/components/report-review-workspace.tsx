@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { CitationPanel } from "@/components/citation-panel";
+import { ExpertReviewPanel } from "@/components/expert-review-panel";
 import { PageIntro } from "@/components/page-intro";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
@@ -19,6 +20,7 @@ import {
   buildReviewMetrics,
   formatDateTime,
   formatNumericScore,
+  getCandidatePodReviewState,
   getCalculationStatusTone,
   getComparatorTone,
   getLimitationSeverityTone,
@@ -31,6 +33,7 @@ import {
 } from "@/lib/report-review";
 
 type ReportReviewWorkspaceProps = {
+  apiBaseUrl: string;
   productId: number;
   report: ProductReportResponse;
 };
@@ -435,8 +438,12 @@ function CalculationAuditRow({
 }
 
 function CandidatePODList({
+  apiBaseUrl,
+  report,
   items,
 }: {
+  apiBaseUrl: string;
+  report: ProductReportResponse;
   items: CandidatePODAssessmentItemResponse[];
 }) {
   if (items.length === 0) {
@@ -450,68 +457,84 @@ function CandidatePODList({
 
   return (
     <div className="review-section-stack">
-      {items.map((item) => (
-        <DetailRow
-          key={item.candidate_pod_id}
-          title={item.title}
-          subtitle={item.claim_text}
-          badges={
-            <>
-              <StatusBadge tone={getSupportCategoryTone(item.support_category)}>
-                {getSupportCategoryLabel(item.support_category)}
-              </StatusBadge>
-              <StatusBadge tone={getReviewRequiredTone(item.expert_review_required)}>
-                {item.expert_review_required
-                  ? "Expert review required"
-                  : "Reviewer-ready"}
-              </StatusBadge>
-            </>
-          }
-          meta={
-            <>
-              <span>Support score {formatNumericScore(item.support_score)}</span>
-              <span>{item.comparator_name ?? "No comparator linked"}</span>
-            </>
-          }
-        >
-          <div className="review-body-grid">
-            <article className="highlight-item">
-              <div className="highlight-title-row">
-                <h3>Support rationale</h3>
+      {items.map((item) => {
+        const reviewState = getCandidatePodReviewState(
+          report,
+          item.candidate_pod_id,
+        );
+
+        return (
+          <DetailRow
+            key={item.candidate_pod_id}
+            title={item.title}
+            subtitle={item.claim_text}
+            badges={
+              <>
                 <StatusBadge tone={getSupportCategoryTone(item.support_category)}>
-                  {formatNumericScore(item.support_score)} / 100
+                  {getSupportCategoryLabel(item.support_category)}
                 </StatusBadge>
-              </div>
-              <p>{item.confidence_rationale}</p>
-            </article>
-            <article className="task-item">
-              <div className="task-item-top">
-                <h3>Assessment details</h3>
-                <StatusBadge tone="neutral">{item.status}</StatusBadge>
-              </div>
-              <ul className="bullet-list">
-                <li>
-                  Confidence score: {formatNumericScore(item.confidence_score)}
-                </li>
-                <li>
-                  Linked finding: {item.linked_finding_title ?? "Not linked"}
-                </li>
-                <li>Comparator: {item.comparator_name ?? "Not linked"}</li>
-              </ul>
-              {item.rationale ? <p>{item.rationale}</p> : null}
-            </article>
-          </div>
-          <ItemCitations
-            citations={item.citations}
-            itemKey={`pod-${item.candidate_pod_id}`}
-            itemTitle={item.title}
-            badgeLabel="Candidate POD support"
-            interpretation="These citations ground the candidate POD assessment used in the report reviewer workspace."
-            entityLabel={item.title}
-            tone="info"
-          />
-        </DetailRow>
-      ))}
+                <StatusBadge tone={getReviewRequiredTone(item.expert_review_required)}>
+                  {item.expert_review_required
+                    ? "Expert review required"
+                    : "Reviewer-ready"}
+                </StatusBadge>
+                {reviewState.overrideApplied ? (
+                  <StatusBadge tone="warning">Expert decision applied</StatusBadge>
+                ) : null}
+              </>
+            }
+            meta={
+              <>
+                <span>Support score {formatNumericScore(item.support_score)}</span>
+                <span>{item.comparator_name ?? "No comparator linked"}</span>
+              </>
+            }
+          >
+            <div className="review-body-grid">
+              <article className="highlight-item">
+                <div className="highlight-title-row">
+                  <h3>Support rationale</h3>
+                  <StatusBadge tone={getSupportCategoryTone(item.support_category)}>
+                    {formatNumericScore(item.support_score)} / 100
+                  </StatusBadge>
+                </div>
+                <p>{item.confidence_rationale}</p>
+              </article>
+              <article className="task-item">
+                <div className="task-item-top">
+                  <h3>Assessment details</h3>
+                  <StatusBadge tone="neutral">{item.status}</StatusBadge>
+                </div>
+                <ul className="bullet-list">
+                  <li>
+                    Confidence score: {formatNumericScore(item.confidence_score)}
+                  </li>
+                  <li>
+                    Linked finding: {item.linked_finding_title ?? "Not linked"}
+                  </li>
+                  <li>Comparator: {item.comparator_name ?? "Not linked"}</li>
+                  <li>Prior expert reviews: {reviewState.history.length}</li>
+                </ul>
+                {item.rationale ? <p>{item.rationale}</p> : null}
+              </article>
+            </div>
+            <ExpertReviewPanel
+              apiBaseUrl={apiBaseUrl}
+              candidatePod={item}
+              reviews={reviewState.history}
+            />
+            <ItemCitations
+              citations={item.citations}
+              itemKey={`pod-${item.candidate_pod_id}`}
+              itemTitle={item.title}
+              badgeLabel="Candidate POD support"
+              interpretation="These citations ground the candidate POD assessment used in the report reviewer workspace."
+              entityLabel={item.title}
+              tone="info"
+            />
+          </DetailRow>
+        );
+      })}
     </div>
   );
 }
@@ -696,7 +719,23 @@ function ExpertReviewList({
                   Candidate POD: {item.linked_candidate_pod_title ?? "Not linked"}
                 </li>
                 <li>Finding: {item.linked_finding_title ?? "Not linked"}</li>
+                <li>
+                  Assessment accepted: {item.accepted_current_assessment ? "Yes" : "No"}
+                </li>
+                <li>
+                  Review flag resolved: {item.expert_review_required_resolved ? "Yes" : "No"}
+                </li>
               </ul>
+              {item.override_support_category || item.override_support_score !== null ? (
+                <p>
+                  {item.override_support_category
+                    ? `Override category: ${getSupportCategoryLabel(item.override_support_category)}. `
+                    : ""}
+                  {item.override_support_score !== null
+                    ? `Override score: ${formatNumericScore(item.override_support_score)}.`
+                    : ""}
+                </p>
+              ) : null}
             </article>
           </div>
           <ItemCitations
@@ -715,6 +754,7 @@ function ExpertReviewList({
 }
 
 export function ReportReviewWorkspace({
+  apiBaseUrl,
   productId,
   report,
 }: ReportReviewWorkspaceProps) {
@@ -839,7 +879,11 @@ export function ReportReviewWorkspace({
               review flag(s)
             </StatusBadge>
           </div>
-          <CandidatePODList items={report.candidate_pod_assessment.items} />
+          <CandidatePODList
+            apiBaseUrl={apiBaseUrl}
+            report={report}
+            items={report.candidate_pod_assessment.items}
+          />
         </article>
 
         <article className="card">

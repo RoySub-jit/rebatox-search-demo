@@ -383,6 +383,32 @@ def _collect_expert_reviews(product: Product) -> list[ExpertReview]:
     return list(reviews_by_id.values())
 
 
+def _review_sort_key(review: ExpertReview) -> tuple[datetime, int]:
+    return (
+        review.reviewed_at
+        or review.updated_at
+        or review.created_at
+        or datetime.min.replace(tzinfo=timezone.utc),
+        review.id,
+    )
+
+
+def _latest_expert_reviews_by_candidate_pod(
+    product: Product,
+) -> dict[int, ExpertReview]:
+    latest_reviews: dict[int, ExpertReview] = {}
+
+    for review in _collect_expert_reviews(product):
+        if review.candidate_pod_id is None:
+            continue
+
+        current = latest_reviews.get(review.candidate_pod_id)
+        if current is None or _review_sort_key(review) > _review_sort_key(current):
+            latest_reviews[review.candidate_pod_id] = review
+
+    return latest_reviews
+
+
 def _collect_calculation_runs(product: Product) -> list[CalculationRun]:
     calculation_runs_by_id: dict[int, CalculationRun] = {}
 
@@ -444,6 +470,7 @@ def _support_result_for_candidate_pod(
     candidate_pod: CandidatePOD,
     comparator_scores: dict[int, float],
     generated_limitations: dict[int, list[GeneratedLimitation]],
+    latest_expert_reviews: dict[int, ExpertReview],
 ) -> CandidatePODSupportResult:
     study = candidate_pod.finding.study if candidate_pod.finding is not None else None
     comparator_score = (
@@ -451,12 +478,53 @@ def _support_result_for_candidate_pod(
         if candidate_pod.comparator is not None
         else None
     )
-
-    return score_candidate_pod_support(
+    support_result = score_candidate_pod_support(
         study=study,
         candidate_pod=candidate_pod,
         limitations=generated_limitations.get(candidate_pod.id, []),
         comparator_relevance_score=comparator_score,
+    )
+    latest_review = latest_expert_reviews.get(candidate_pod.id)
+    if latest_review is None:
+        return support_result
+
+    support_category = (
+        latest_review.override_support_category or support_result.support_category
+    )
+    support_score = (
+        float(latest_review.override_support_score)
+        if latest_review.override_support_score is not None
+        else support_result.support_score
+    )
+    expert_review_required = (
+        False
+        if latest_review.expert_review_required_resolved
+        else support_result.expert_review_required
+    )
+
+    expert_updates: list[str] = []
+    if latest_review.accepted_current_assessment:
+        expert_updates.append("expert accepted the current assessment")
+    if latest_review.override_support_category is not None:
+        expert_updates.append(
+            f"support category overridden to {support_category.replace('_', ' ')}"
+        )
+    if latest_review.override_support_score is not None:
+        expert_updates.append(f"support score overridden to {support_score:.1f}")
+    if latest_review.expert_review_required_resolved:
+        expert_updates.append("expert review requirement marked resolved")
+
+    rationale = support_result.confidence_rationale
+    if expert_updates:
+        rationale = (
+            f"{rationale} Latest expert review update: {'; '.join(expert_updates)}."
+        )
+
+    return CandidatePODSupportResult(
+        support_category=support_category,
+        support_score=support_score,
+        confidence_rationale=rationale,
+        expert_review_required=expert_review_required,
     )
 
 
@@ -606,6 +674,7 @@ def _build_candidate_pod_assessment(
     *,
     comparator_scores: dict[int, float],
     generated_limitations: dict[int, list[GeneratedLimitation]],
+    latest_expert_reviews: dict[int, ExpertReview],
 ) -> CandidatePODAssessmentSection:
     items: list[CandidatePODAssessmentItem] = []
     for candidate_pod in sorted(product.candidate_pods, key=lambda item: item.title.lower()):
@@ -613,6 +682,7 @@ def _build_candidate_pod_assessment(
             candidate_pod=candidate_pod,
             comparator_scores=comparator_scores,
             generated_limitations=generated_limitations,
+            latest_expert_reviews=latest_expert_reviews,
         )
         items.append(
             CandidatePODAssessmentItem(
@@ -714,6 +784,7 @@ def _build_suggested_next_experiments(
     limitations: LimitationsSection,
     comparator_scores: dict[int, float],
     generated_limitations: dict[int, list[GeneratedLimitation]],
+    latest_expert_reviews: dict[int, ExpertReview],
 ) -> SuggestedNextExperimentsSection:
     items: list[SuggestedExperimentItem] = []
     seen_titles: set[str] = set()
@@ -776,6 +847,7 @@ def _build_suggested_next_experiments(
             candidate_pod=candidate_pod,
             comparator_scores=comparator_scores,
             generated_limitations=generated_limitations,
+            latest_expert_reviews=latest_expert_reviews,
         )
         comparator_score = (
             comparator_scores.get(candidate_pod.comparator.id)
@@ -818,7 +890,7 @@ def _build_suggested_next_experiments(
 def _build_expert_review_section(product: Product) -> ExpertReviewSection:
     reviews = sorted(
         _collect_expert_reviews(product),
-        key=lambda item: (item.reviewed_at or datetime.min.replace(tzinfo=timezone.utc), item.id),
+        key=_review_sort_key,
         reverse=True,
     )
 
@@ -827,8 +899,13 @@ def _build_expert_review_section(product: Product) -> ExpertReviewSection:
             expert_review_id=review.id,
             reviewer_name=review.reviewer_name,
             reviewer_email=review.reviewer_email,
+            linked_candidate_pod_id=review.candidate_pod_id,
             verdict=review.verdict,
             score=review.score,
+            accepted_current_assessment=review.accepted_current_assessment,
+            expert_review_required_resolved=review.expert_review_required_resolved,
+            override_support_category=review.override_support_category,
+            override_support_score=review.override_support_score,
             notes=review.notes,
             reviewed_at=review.reviewed_at,
             linked_finding_title=review.finding.title if review.finding is not None else None,
@@ -907,6 +984,7 @@ def generate_product_report(*, db: Session, product_id: int) -> ProductReportRea
     product_overview = _build_product_overview(product)
     comparator_scores = _score_comparators(product)
     generated_limitations = _generated_limitations_by_candidate_pod(product)
+    latest_expert_reviews = _latest_expert_reviews_by_candidate_pod(product)
     comparator_summary = _build_comparator_summary(
         product,
         comparator_scores=comparator_scores,
@@ -916,6 +994,7 @@ def generate_product_report(*, db: Session, product_id: int) -> ProductReportRea
         product,
         comparator_scores=comparator_scores,
         generated_limitations=generated_limitations,
+        latest_expert_reviews=latest_expert_reviews,
     )
     limitations = _build_limitations(
         product,
@@ -926,6 +1005,7 @@ def generate_product_report(*, db: Session, product_id: int) -> ProductReportRea
         limitations=limitations,
         comparator_scores=comparator_scores,
         generated_limitations=generated_limitations,
+        latest_expert_reviews=latest_expert_reviews,
     )
     expert_review_section = _build_expert_review_section(product)
 

@@ -149,8 +149,13 @@ class ExpertReviewItem(BaseModel):
     expert_review_id: int
     reviewer_name: str
     reviewer_email: str | None = None
+    linked_candidate_pod_id: int | None = None
     verdict: str
     score: float | None = None
+    accepted_current_assessment: bool = False
+    expert_review_required_resolved: bool = False
+    override_support_category: str | None = None
+    override_support_score: float | None = None
     notes: str | None = None
     reviewed_at: datetime | None = None
     linked_finding_title: str | None = None

@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildCitationPanelModels,
   buildReviewMetrics,
+  getCandidatePodReviewState,
   getSparseReportState,
   getSupportCategoryLabel,
   getSupportCategoryTone,
@@ -106,8 +107,13 @@ function buildPopulatedReport() {
           expert_review_id: 1,
           reviewer_name: "Dr. Ada Review",
           reviewer_email: "ada@example.test",
+          linked_candidate_pod_id: 9,
           verdict: "approve",
           score: 4,
+          accepted_current_assessment: true,
+          expert_review_required_resolved: true,
+          override_support_category: null,
+          override_support_score: null,
           notes: "Ready for finalization.",
           reviewed_at: "2026-04-20T09:00:00Z",
           linked_finding_title: "Reference alignment",
@@ -231,4 +237,33 @@ test("report-review helpers build expandable citation panel models", () => {
     citationModels[0].interpretation,
     "This citation grounds the calculation audit trail in the reviewer workspace.",
   );
+});
+
+test("report-review helpers surface prior expert notes and override state", () => {
+  const report = buildPopulatedReport();
+  report.expert_review_section.items.unshift({
+    expert_review_id: 2,
+    reviewer_name: "Dr. Override Review",
+    reviewer_email: "override@example.test",
+    linked_candidate_pod_id: 9,
+    verdict: "revise",
+    score: 3.8,
+    accepted_current_assessment: false,
+    expert_review_required_resolved: true,
+    override_support_category: "inferred_pod_from_public_data",
+    override_support_score: 67,
+    notes: "Use the inferred category until the bridge package is finalized.",
+    reviewed_at: "2026-04-21T10:00:00Z",
+    linked_finding_title: "Reference alignment",
+    linked_candidate_pod_title: "Lead NOAEL candidate",
+    citations: [],
+  });
+
+  const reviewState = getCandidatePodReviewState(report, 9);
+
+  assert.equal(reviewState.history.length, 2);
+  assert.equal(reviewState.latestReview?.reviewer_name, "Dr. Override Review");
+  assert.equal(reviewState.latestReview?.notes, "Use the inferred category until the bridge package is finalized.");
+  assert.equal(reviewState.overrideApplied, true);
+  assert.equal(reviewState.reviewResolved, true);
 });

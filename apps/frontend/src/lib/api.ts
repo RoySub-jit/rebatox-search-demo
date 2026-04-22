@@ -78,6 +78,12 @@ export type CandidatePODAssessmentItemResponse = {
   citations: ReportCitationResponse[];
 };
 
+export type SupportCategory =
+  | "explicit_pod_available"
+  | "inferred_pod_from_public_data"
+  | "analog_supported_provisional_pod"
+  | "insufficient_public_data_for_pod";
+
 export type ReportLimitationItemResponse = {
   source: "persisted" | "generated" | "recommendation";
   title: string;
@@ -106,8 +112,13 @@ export type ExpertReviewItemResponse = {
   expert_review_id: number;
   reviewer_name: string;
   reviewer_email: string | null;
+  linked_candidate_pod_id: number | null;
   verdict: string;
   score: number | null;
+  accepted_current_assessment: boolean;
+  expert_review_required_resolved: boolean;
+  override_support_category: SupportCategory | null;
+  override_support_score: number | null;
   notes: string | null;
   reviewed_at: string | null;
   linked_finding_title: string | null;
@@ -193,6 +204,40 @@ export type RunCalculationPayload = {
   comparator_id?: number;
   study_id?: number;
   candidate_pod_id?: number;
+};
+
+export type ExpertReviewPayload = {
+  candidate_pod_id: number;
+  calculation_run_id?: number | null;
+  reviewer_name: string;
+  reviewer_email?: string | null;
+  verdict: string;
+  score?: number | null;
+  accepted_current_assessment: boolean;
+  expert_review_required_resolved: boolean;
+  override_support_category?: SupportCategory | null;
+  override_support_score?: number | null;
+  notes?: string | null;
+  reviewed_at?: string | null;
+};
+
+export type ExpertReviewResponse = {
+  id: number;
+  candidate_pod_id: number | null;
+  finding_id: number | null;
+  calculation_run_id: number | null;
+  reviewer_name: string;
+  reviewer_email: string | null;
+  verdict: string;
+  score: number | null;
+  accepted_current_assessment: boolean;
+  expert_review_required_resolved: boolean;
+  override_support_category: SupportCategory | null;
+  override_support_score: number | null;
+  notes: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type ApiErrorPayload = {
@@ -282,6 +327,31 @@ export function getProductReport(apiBaseUrl: string, productId: number) {
     `/api/v1/reports/${productId}`,
     {
       method: "GET",
+    },
+  );
+}
+
+export function createExpertReview(
+  apiBaseUrl: string,
+  payload: ExpertReviewPayload,
+) {
+  return requestJson<ExpertReviewResponse>(apiBaseUrl, "/api/v1/expert-reviews", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateExpertReview(
+  apiBaseUrl: string,
+  expertReviewId: number,
+  payload: ExpertReviewPayload,
+) {
+  return requestJson<ExpertReviewResponse>(
+    apiBaseUrl,
+    `/api/v1/expert-reviews/${expertReviewId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
     },
   );
 }

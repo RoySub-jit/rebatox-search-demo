@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     JSON,
     DateTime,
     ForeignKey,
@@ -295,6 +296,24 @@ class ExpertReview(PrimaryKeyMixin, TimestampMixin, Base):
     reviewer_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     verdict: Mapped[str] = mapped_column(String(100), nullable=False)
     score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    accepted_current_assessment: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    expert_review_required_resolved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    override_support_category: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    override_support_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
