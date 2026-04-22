@@ -1,4 +1,6 @@
-# Spatial Platform Monorepo
+# RebaTox
+
+Evidence, POD, and Risk Support for Nonclinical Safety
 
 Production-ready starter monorepo with:
 
@@ -11,6 +13,8 @@ Production-ready starter monorepo with:
 - Environment variable templates
 - Pytest setup
 - Database-aware health check endpoint
+
+RebaTox is the reviewer-facing workspace for evidence synthesis, candidate POD support, and nonclinical safety risk framing.
 
 ## Structure
 

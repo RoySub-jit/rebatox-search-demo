@@ -37,7 +37,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
         <section className="card feedback-banner danger">
           <div className="card-heading">
             <div>
-              <span className="section-kicker">Reviewer workspace</span>
+              <span className="section-kicker">RebaTox reviewer workspace</span>
               <h2>Invalid product id</h2>
             </div>
             <StatusBadge tone="danger">Input error</StatusBadge>
@@ -60,7 +60,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
         <section className="card feedback-banner danger">
           <div className="card-heading">
             <div>
-              <span className="section-kicker">Reviewer workspace</span>
+              <span className="section-kicker">RebaTox reviewer workspace</span>
               <h2>Report unavailable</h2>
             </div>
             <StatusBadge tone="danger">API issue</StatusBadge>

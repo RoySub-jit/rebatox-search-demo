@@ -725,9 +725,9 @@ export function ReportReviewWorkspace({
   return (
     <div className="page-stack">
       <PageIntro
-        eyebrow="Reviewer workspace"
-        title={`${report.product_overview.name} tox report review`}
-        description="Review the full report package in one place: product context, comparator relevance, evidence and calculations, candidate POD support, limitations, follow-up experiments, and expert review outcomes."
+        eyebrow="RebaTox reviewer workspace"
+        title={`${report.product_overview.name} review in RebaTox`}
+        description="Evidence, POD, and Risk Support for Nonclinical Safety. Review the full report package in one place: product context, comparator relevance, evidence and calculations, candidate POD support, limitations, follow-up experiments, and expert review outcomes."
         actions={
           <>
             <StatusBadge tone="neutral">Product #{productId}</StatusBadge>

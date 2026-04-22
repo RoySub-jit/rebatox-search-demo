@@ -16,8 +16,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Spatial Platform",
-  description: "Monorepo starter with FastAPI, PostgreSQL, and Next.js.",
+  title: "RebaTox",
+  description: "Evidence, POD, and Risk Support for Nonclinical Safety.",
 };
 
 export default function RootLayout({

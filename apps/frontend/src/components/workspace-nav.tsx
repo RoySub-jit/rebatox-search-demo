@@ -12,11 +12,11 @@ export function WorkspaceNav() {
   return (
     <aside className="workspace-sidebar">
       <div className="brand-card">
-        <div className="brand-mark">SP</div>
+        <div className="brand-mark">RT</div>
         <div>
           <div className="brand-title">{appConfig.name}</div>
           <p className="brand-copy">
-            Safety evidence workspace for product, review, and reporting teams.
+            Evidence, POD, and Risk Support for Nonclinical Safety
           </p>
         </div>
       </div>
