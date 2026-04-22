@@ -22,6 +22,7 @@ from app.models.research import (
 from app.schemas.reports import (
     CandidatePODAssessmentItem,
     CandidatePODAssessmentSection,
+    CalculationSummaryItem,
     ComparatorSummaryItem,
     ComparatorSummarySection,
     EvidenceFindingItem,
@@ -99,6 +100,8 @@ COMPARATOR_SIGNAL_PATTERNS: dict[str, re.Pattern[str]] = {
         re.IGNORECASE,
     ),
 }
+
+DEFAULT_CALCULATION_FORMULA_VERSION = "1.0"
 
 
 def _fallback_source_document_citation(
@@ -262,6 +265,20 @@ def _citations_for_expert_review(review: ExpertReview) -> list[ReportCitation]:
     return []
 
 
+def _citations_for_calculation_run(calculation_run: CalculationRun) -> list[ReportCitation]:
+    if calculation_run.candidate_pod is not None:
+        citations = _citations_for_candidate_pod(calculation_run.candidate_pod)
+        if citations:
+            return citations
+
+    if calculation_run.study is not None:
+        citations = _citations_for_study(calculation_run.study)
+        if citations:
+            return citations
+
+    return []
+
+
 def _titleize_identifier(identifier: str) -> str:
     return identifier.replace("_", " ").title()
 
@@ -364,6 +381,30 @@ def _collect_expert_reviews(product: Product) -> list[ExpertReview]:
             reviews_by_id[review.id] = review
 
     return list(reviews_by_id.values())
+
+
+def _collect_calculation_runs(product: Product) -> list[CalculationRun]:
+    calculation_runs_by_id: dict[int, CalculationRun] = {}
+
+    for calculation_run in product.calculation_runs:
+        calculation_runs_by_id[calculation_run.id] = calculation_run
+
+    for study in product.studies:
+        for calculation_run in study.calculation_runs:
+            calculation_runs_by_id[calculation_run.id] = calculation_run
+
+    for candidate_pod in product.candidate_pods:
+        for calculation_run in candidate_pod.calculation_runs:
+            calculation_runs_by_id[calculation_run.id] = calculation_run
+
+    return sorted(
+        calculation_runs_by_id.values(),
+        key=lambda item: (
+            item.completed_at or item.started_at or item.created_at,
+            item.id,
+        ),
+        reverse=True,
+    )
 
 
 def _score_comparators(product: Product) -> dict[int, float]:
@@ -491,6 +532,16 @@ def _build_comparator_summary(
     )
 
 
+def _formula_version_for_calculation_run(calculation_run: CalculationRun) -> str:
+    result_json = calculation_run.result_json or {}
+    formula_version = result_json.get("formula_version")
+
+    if isinstance(formula_version, str) and formula_version.strip():
+        return formula_version
+
+    return DEFAULT_CALCULATION_FORMULA_VERSION
+
+
 def _build_evidence_summary(product: Product) -> EvidenceSummarySection:
     studies = [
         EvidenceStudyItem(
@@ -521,15 +572,31 @@ def _build_evidence_summary(product: Product) -> EvidenceSummarySection:
         for finding in sorted(study.findings, key=lambda item: item.title.lower())
     ]
 
+    calculations = [
+        CalculationSummaryItem(
+            calculation_id=calculation_run.id,
+            calculation_type=calculation_run.run_type,
+            status=calculation_run.status,
+            formula_version=_formula_version_for_calculation_run(calculation_run),
+            inputs=calculation_run.parameters_json or {},
+            outputs=(calculation_run.result_json or {}).get("result") or {},
+            assumptions=list((calculation_run.result_json or {}).get("assumptions") or []),
+            warnings=list((calculation_run.result_json or {}).get("warnings") or []),
+            citations=_citations_for_calculation_run(calculation_run),
+        )
+        for calculation_run in _collect_calculation_runs(product)
+    ]
+
     item_citations = [citation for item in studies for citation in item.citations] + [
         citation for item in findings for citation in item.citations
-    ]
+    ] + [citation for item in calculations for citation in item.citations]
 
     return EvidenceSummarySection(
         study_count=len(studies),
         finding_count=len(findings),
         studies=studies,
         findings=findings,
+        calculations=calculations,
         citations=_section_citations(item_citations=item_citations),
     )
 
@@ -799,6 +866,7 @@ def _load_product_for_report(*, db: Session, product_id: int) -> Product | None:
             .selectinload(CitationSpan.document_chunk)
             .selectinload(DocumentChunk.source_document),
             selectinload(Product.studies).selectinload(Study.findings).selectinload(Finding.expert_reviews),
+            selectinload(Product.studies).selectinload(Study.calculation_runs),
             selectinload(Product.studies).selectinload(Study.limitations).selectinload(Limitation.finding),
             selectinload(Product.studies).selectinload(Study.recommendations).selectinload(Recommendation.finding),
             selectinload(Product.studies).selectinload(Study.recommendations).selectinload(Recommendation.candidate_pod),
@@ -809,6 +877,7 @@ def _load_product_for_report(*, db: Session, product_id: int) -> Product | None:
             .selectinload(CitationSpan.document_chunk)
             .selectinload(DocumentChunk.source_document),
             selectinload(Product.candidate_pods).selectinload(CandidatePOD.finding).selectinload(Finding.study),
+            selectinload(Product.candidate_pods).selectinload(CandidatePOD.calculation_runs),
             selectinload(Product.candidate_pods).selectinload(CandidatePOD.recommendations).selectinload(Recommendation.finding),
             selectinload(Product.candidate_pods).selectinload(CandidatePOD.expert_reviews).selectinload(ExpertReview.finding),
             selectinload(Product.candidate_pods).selectinload(CandidatePOD.expert_reviews).selectinload(ExpertReview.candidate_pod),

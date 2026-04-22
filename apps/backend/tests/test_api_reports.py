@@ -5,7 +5,15 @@ from decimal import Decimal
 
 from app.models.catalog import Comparator, Product
 from app.models.document import CitationSpan, DocumentChunk, SourceDocument
-from app.models.research import CandidatePOD, ExpertReview, Finding, Limitation, Recommendation, Study
+from app.models.research import (
+    CalculationRun,
+    CandidatePOD,
+    ExpertReview,
+    Finding,
+    Limitation,
+    Recommendation,
+    Study,
+)
 
 
 def _build_seeded_report_data(db_session):
@@ -371,6 +379,33 @@ def _build_weak_comparator_report_data(db_session):
     return product
 
 
+def _add_calculation_run(
+    db_session,
+    *,
+    product: Product,
+    run_type: str,
+    status: str,
+    parameters_json: dict,
+    result_json: dict,
+):
+    calculation_run = CalculationRun(
+        product=product,
+        study=product.studies[0] if product.studies else None,
+        candidate_pod=product.candidate_pods[0] if product.candidate_pods else None,
+        run_type=run_type,
+        status=status,
+        parameters_json=parameters_json,
+        result_json=result_json,
+        started_at=datetime(2024, 4, 1, 12, 0, tzinfo=timezone.utc),
+        completed_at=datetime(2024, 4, 1, 12, 0, tzinfo=timezone.utc),
+    )
+    db_session.add(calculation_run)
+    db_session.commit()
+    db_session.refresh(product)
+
+    return calculation_run
+
+
 def test_get_product_report_returns_structured_sections_with_citations(client, db_session):
     product = _build_seeded_report_data(db_session)
 
@@ -406,6 +441,7 @@ def test_get_product_report_returns_structured_sections_with_citations(client, d
         "Systemic exposure remained within the maintenance band and supported the NOAEL selection."
     )
     assert "finding_id" not in evidence_summary["findings"][0]["citations"][0]
+    assert evidence_summary["calculations"] == []
     assert evidence_summary["citations"] == []
 
     candidate_assessment = payload["candidate_pod_assessment"]
@@ -476,6 +512,129 @@ def test_get_product_report_returns_empty_section_shapes_for_missing_optional_re
         "items": [],
         "citations": [],
     }
+
+
+def test_get_product_report_includes_valid_calculation_summary(client, db_session):
+    product = _build_seeded_report_data(db_session)
+    _add_calculation_run(
+        db_session,
+        product=product,
+        run_type="margin_of_exposure",
+        status="ok",
+        parameters_json={
+            "point_of_departure": "100",
+            "exposure": "2",
+            "basis": "mg/kg/day",
+        },
+        result_json={
+            "calculator": "margin_of_exposure",
+            "formula": "MOE = POD / Exposure",
+            "inputs": {
+                "point_of_departure": "100",
+                "exposure": "2",
+                "basis": "mg/kg/day",
+            },
+            "assumptions": [
+                "Point of departure and exposure share the same dose basis.",
+            ],
+            "result": {
+                "value": "50.0",
+                "unit": "ratio",
+            },
+            "warnings": [],
+            "status": "ok",
+        },
+    )
+
+    response = client.get(f"/api/v1/reports/{product.id}")
+
+    assert response.status_code == 200
+
+    calculation = response.json()["evidence_summary"]["calculations"][0]
+    assert calculation["calculation_type"] == "margin_of_exposure"
+    assert calculation["status"] == "ok"
+    assert calculation["formula_version"] == "1.0"
+    assert calculation["inputs"] == {
+        "point_of_departure": "100",
+        "exposure": "2",
+        "basis": "mg/kg/day",
+    }
+    assert calculation["outputs"] == {
+        "value": "50.0",
+        "unit": "ratio",
+    }
+    assert calculation["assumptions"] == [
+        "Point of departure and exposure share the same dose basis."
+    ]
+    assert calculation["warnings"] == []
+    assert calculation["citations"][0]["source_document_title"] == "CSR CVX-301"
+
+
+def test_get_product_report_includes_warning_status_calculation_summary(client, db_session):
+    product = _build_seeded_report_data(db_session)
+    _add_calculation_run(
+        db_session,
+        product=product,
+        run_type="ade",
+        status="warning",
+        parameters_json={
+            "point_of_departure_mg_per_kg_day": "0.6",
+            "body_weight_kg": "50",
+            "modifying_factor_f1": "1",
+            "modifying_factor_f2": "1",
+            "modifying_factor_f3": "1",
+            "modifying_factor_f4": "1",
+            "modifying_factor_f5": "1",
+            "point_of_departure_label": "POD",
+            "result_unit": "mg/day",
+        },
+        result_json={
+            "calculator": "ade_calculator_shell",
+            "formula": "ADE = POD x body_weight / composite_modifying_factor",
+            "formula_version": "2026.04",
+            "inputs": {
+                "point_of_departure_mg_per_kg_day": "0.6",
+                "body_weight_kg": "50",
+            },
+            "assumptions": [
+                "All modifying factors default to 1 unless specified otherwise.",
+            ],
+            "result": {
+                "value": "30.0",
+                "unit": "mg/day",
+                "composite_modifying_factor": "1",
+            },
+            "warnings": [
+                "All modifying factors are 1, so no uncertainty adjustment has been applied."
+            ],
+            "status": "warning",
+        },
+    )
+
+    response = client.get(f"/api/v1/reports/{product.id}")
+
+    assert response.status_code == 200
+
+    calculation = response.json()["evidence_summary"]["calculations"][0]
+    assert calculation["calculation_type"] == "ade"
+    assert calculation["status"] == "warning"
+    assert calculation["formula_version"] == "2026.04"
+    assert calculation["warnings"] == [
+        "All modifying factors are 1, so no uncertainty adjustment has been applied."
+    ]
+    assert calculation["outputs"]["value"] == "30.0"
+
+
+def test_get_product_report_returns_empty_calculation_summaries_when_none_are_linked(
+    client,
+    db_session,
+):
+    product = _build_partial_report_data_without_optional_sections(db_session)
+
+    response = client.get(f"/api/v1/reports/{product.id}")
+
+    assert response.status_code == 200
+    assert response.json()["evidence_summary"]["calculations"] == []
 
 
 def test_get_product_report_integrates_strong_comparator_and_no_limitations(
@@ -564,6 +723,7 @@ def test_get_product_report_handles_no_comparator_and_no_study_data(
         "finding_count": 0,
         "studies": [],
         "findings": [],
+        "calculations": [],
         "citations": [],
     }
     assert payload["limitations"] == {

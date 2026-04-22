@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -69,11 +69,24 @@ class EvidenceFindingItem(BaseModel):
     citations: list[ReportCitation] = Field(default_factory=list)
 
 
+class CalculationSummaryItem(BaseModel):
+    calculation_id: int
+    calculation_type: str
+    status: str
+    formula_version: str
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    outputs: dict[str, Any] = Field(default_factory=dict)
+    assumptions: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    citations: list[ReportCitation] = Field(default_factory=list)
+
+
 class EvidenceSummarySection(BaseModel):
     study_count: int
     finding_count: int
     studies: list[EvidenceStudyItem] = Field(default_factory=list)
     findings: list[EvidenceFindingItem] = Field(default_factory=list)
+    calculations: list[CalculationSummaryItem] = Field(default_factory=list)
     citations: list[ReportCitation] = Field(default_factory=list)
 
 
