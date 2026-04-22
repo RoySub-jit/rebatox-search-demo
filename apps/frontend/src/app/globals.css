@@ -772,6 +772,121 @@ pre {
   text-align: center;
 }
 
+.review-overview-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-block,
+.review-row,
+.review-empty-state,
+.review-row-meta,
+.review-section-stack,
+.review-body-grid,
+.audit-grid {
+  display: grid;
+}
+
+.overview-block {
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.overview-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.overview-copy {
+  margin: 18px 0 0;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.review-section-stack {
+  gap: 14px;
+}
+
+.review-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  overflow: hidden;
+}
+
+.review-row-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 18px;
+}
+
+.review-row-summary::-webkit-details-marker {
+  display: none;
+}
+
+.review-row-copy h3 {
+  margin: 0 0 8px;
+  font-size: 1.04rem;
+}
+
+.review-row-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.review-row-aside {
+  min-width: 230px;
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.review-row-meta {
+  gap: 6px;
+  text-align: right;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.review-row-body {
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+
+.review-body-grid,
+.audit-grid {
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.review-subheading {
+  margin-bottom: 14px;
+}
+
+.review-empty-state {
+  min-height: 140px;
+  border-style: dashed;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(248, 244, 238, 0.92));
+}
+
+.review-citation-stack {
+  margin-top: 2px;
+}
+
 @media (max-width: 1160px) {
   .workspace-shell {
     grid-template-columns: 1fr;
@@ -794,7 +909,8 @@ pre {
   .highlight-title-row,
   .task-item-top,
   .result-topline,
-  .study-card-head {
+  .study-card-head,
+  .review-row-summary {
     flex-direction: column;
   }
 
@@ -803,8 +919,21 @@ pre {
   .calculation-grid,
   .result-grid,
   .field-grid,
-  .study-field-grid {
+  .study-field-grid,
+  .review-overview-grid,
+  .review-body-grid,
+  .audit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .review-row-aside {
+    min-width: 0;
+    width: 100%;
+    justify-items: start;
+  }
+
+  .review-row-meta {
+    text-align: left;
   }
 
   .page-intro-copy h1 {

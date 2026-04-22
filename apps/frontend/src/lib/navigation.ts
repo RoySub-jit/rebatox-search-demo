@@ -25,8 +25,8 @@ export const workspaceNavItems = [
   },
   {
     href: "/report",
-    label: "Report",
+    label: "Report review",
     shortLabel: "05",
-    description: "Assemble decision-ready narrative outputs.",
+    description: "Review the full tox report with evidence, scoring, and audit trails.",
   },
 ] as const;

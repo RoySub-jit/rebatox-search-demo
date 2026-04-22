@@ -5,6 +5,161 @@ export type CalculationType =
   | "pde"
   | "ade";
 
+export type ReportCitationResponse = {
+  source_document_id: number | null;
+  source_document_title: string;
+  citation_span_id: number | null;
+  label: string | null;
+  quoted_text: string | null;
+  chunk_index: number | null;
+  page_number_start: number | null;
+  page_number_end: number | null;
+};
+
+export type ComparatorSummaryItemResponse = {
+  comparator_id: number;
+  name: string;
+  category: string | null;
+  description: string | null;
+  relevance_score: number;
+  relevance_rationale: string;
+  linked_study_count: number;
+  linked_candidate_pod_count: number;
+  citations: ReportCitationResponse[];
+};
+
+export type EvidenceStudyItemResponse = {
+  study_id: number;
+  title: string;
+  study_design: string | null;
+  status: string | null;
+  source_document_title: string | null;
+  published_at: string | null;
+  citations: ReportCitationResponse[];
+};
+
+export type EvidenceFindingItemResponse = {
+  finding_id: number;
+  study_id: number;
+  study_title: string;
+  title: string;
+  summary: string;
+  finding_type: string | null;
+  evidence_direction: string | null;
+  effect_estimate: number | null;
+  citations: ReportCitationResponse[];
+};
+
+export type CalculationSummaryItemResponse = {
+  calculation_id: number;
+  calculation_type: string;
+  status: string;
+  formula_version: string;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  assumptions: string[];
+  warnings: string[];
+  citations: ReportCitationResponse[];
+};
+
+export type CandidatePODAssessmentItemResponse = {
+  candidate_pod_id: number;
+  title: string;
+  claim_text: string;
+  rationale: string | null;
+  status: string;
+  confidence_score: number | null;
+  support_category: string;
+  support_score: number;
+  confidence_rationale: string;
+  expert_review_required: boolean;
+  comparator_name: string | null;
+  linked_finding_title: string | null;
+  citations: ReportCitationResponse[];
+};
+
+export type ReportLimitationItemResponse = {
+  source: "persisted" | "generated" | "recommendation";
+  title: string;
+  description: string;
+  severity: string | null;
+  why_it_matters: string;
+  resolution_suggestion: string;
+  is_blocking: boolean;
+  study_title: string | null;
+  finding_title: string | null;
+  candidate_pod_title: string | null;
+  citations: ReportCitationResponse[];
+};
+
+export type SuggestedExperimentItemResponse = {
+  source: "persisted" | "generated" | "recommendation";
+  title: string;
+  rationale: string;
+  priority: string | null;
+  linked_limitation_title: string | null;
+  recommendation_status: string | null;
+  citations: ReportCitationResponse[];
+};
+
+export type ExpertReviewItemResponse = {
+  expert_review_id: number;
+  reviewer_name: string;
+  reviewer_email: string | null;
+  verdict: string;
+  score: number | null;
+  notes: string | null;
+  reviewed_at: string | null;
+  linked_finding_title: string | null;
+  linked_candidate_pod_title: string | null;
+  citations: ReportCitationResponse[];
+};
+
+export type ProductReportResponse = {
+  product_id: number;
+  generated_at: string;
+  product_overview: {
+    name: string;
+    slug: string;
+    manufacturer: string | null;
+    description: string | null;
+    study_count: number;
+    finding_count: number;
+    candidate_pod_count: number;
+    citations: ReportCitationResponse[];
+  };
+  comparator_summary: {
+    items: ComparatorSummaryItemResponse[];
+    citations: ReportCitationResponse[];
+  };
+  evidence_summary: {
+    study_count: number;
+    finding_count: number;
+    studies: EvidenceStudyItemResponse[];
+    findings: EvidenceFindingItemResponse[];
+    calculations: CalculationSummaryItemResponse[];
+    citations: ReportCitationResponse[];
+  };
+  candidate_pod_assessment: {
+    items: CandidatePODAssessmentItemResponse[];
+    citations: ReportCitationResponse[];
+  };
+  limitations: {
+    items: ReportLimitationItemResponse[];
+    citations: ReportCitationResponse[];
+  };
+  suggested_next_experiments: {
+    items: SuggestedExperimentItemResponse[];
+    citations: ReportCitationResponse[];
+  };
+  expert_review_section: {
+    review_count: number;
+    average_score: number | null;
+    items: ExpertReviewItemResponse[];
+    citations: ReportCitationResponse[];
+  };
+};
+
 export type CalculationOutput = {
   calculator: string;
   formula: string;
@@ -115,6 +270,16 @@ export function getCalculationRun(apiBaseUrl: string, calculationId: number) {
   return requestJson<CalculationRunResponse>(
     apiBaseUrl,
     `/api/v1/calculations/${calculationId}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function getProductReport(apiBaseUrl: string, productId: number) {
+  return requestJson<ProductReportResponse>(
+    apiBaseUrl,
+    `/api/v1/reports/${productId}`,
     {
       method: "GET",
     },
