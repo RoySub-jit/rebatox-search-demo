@@ -84,6 +84,10 @@ class CandidatePODAssessmentItem(BaseModel):
     rationale: str | None = None
     status: str
     confidence_score: float | None = None
+    support_category: str
+    support_score: float
+    confidence_rationale: str
+    expert_review_required: bool
     comparator_name: str | None = None
     linked_finding_title: str | None = None
     citations: list[ReportCitation] = Field(default_factory=list)

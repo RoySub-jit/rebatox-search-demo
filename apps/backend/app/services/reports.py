@@ -38,8 +38,11 @@ from app.schemas.reports import (
     SuggestedNextExperimentsSection,
 )
 from app.schemas.comparator_scoring import ComparatorScoringInput
+from app.schemas.limitations import GeneratedLimitation
+from app.schemas.pod_support import CandidatePODSupportResult
 from app.services.comparator_scoring import score_comparator
 from app.services.limitations import generate_rule_based_limitations
+from app.services.pod_support import generate_pod_recommendations, score_candidate_pod_support
 
 LIMITATION_EXPERIMENT_MAP: dict[str, tuple[str, str, str]] = {
     "missing_route": (
@@ -363,6 +366,59 @@ def _collect_expert_reviews(product: Product) -> list[ExpertReview]:
     return list(reviews_by_id.values())
 
 
+def _score_comparators(product: Product) -> dict[int, float]:
+    comparator_map: dict[int, Comparator] = {}
+
+    for study in product.studies:
+        if study.comparator is not None:
+            comparator_map[study.comparator.id] = study.comparator
+
+    for candidate_pod in product.candidate_pods:
+        if candidate_pod.comparator is not None:
+            comparator_map[candidate_pod.comparator.id] = candidate_pod.comparator
+
+    return {
+        comparator_id: score_comparator(_build_comparator_scoring_input(comparator)).relevance_score
+        for comparator_id, comparator in comparator_map.items()
+    }
+
+
+def _generated_limitations_by_candidate_pod(
+    product: Product,
+) -> dict[int, list[GeneratedLimitation]]:
+    generated_limitations: dict[int, list[GeneratedLimitation]] = {}
+
+    for candidate_pod in product.candidate_pods:
+        study = candidate_pod.finding.study if candidate_pod.finding is not None else None
+        generated_limitations[candidate_pod.id] = generate_rule_based_limitations(
+            study=study,
+            candidate_pod=candidate_pod,
+        )
+
+    return generated_limitations
+
+
+def _support_result_for_candidate_pod(
+    *,
+    candidate_pod: CandidatePOD,
+    comparator_scores: dict[int, float],
+    generated_limitations: dict[int, list[GeneratedLimitation]],
+) -> CandidatePODSupportResult:
+    study = candidate_pod.finding.study if candidate_pod.finding is not None else None
+    comparator_score = (
+        comparator_scores.get(candidate_pod.comparator.id)
+        if candidate_pod.comparator is not None
+        else None
+    )
+
+    return score_candidate_pod_support(
+        study=study,
+        candidate_pod=candidate_pod,
+        limitations=generated_limitations.get(candidate_pod.id, []),
+        comparator_relevance_score=comparator_score,
+    )
+
+
 def _build_product_overview(product: Product) -> ProductOverviewSection:
     citations = _dedupe_citations(
         [
@@ -384,7 +440,11 @@ def _build_product_overview(product: Product) -> ProductOverviewSection:
     )
 
 
-def _build_comparator_summary(product: Product) -> ComparatorSummarySection:
+def _build_comparator_summary(
+    product: Product,
+    *,
+    comparator_scores: dict[int, float],
+) -> ComparatorSummarySection:
     comparator_map: dict[int, Comparator] = {}
     comparator_citations: defaultdict[int, list[ReportCitation]] = defaultdict(list)
     study_counts: defaultdict[int, int] = defaultdict(int)
@@ -415,7 +475,7 @@ def _build_comparator_summary(product: Product) -> ComparatorSummarySection:
                 name=comparator.name,
                 category=comparator.category,
                 description=comparator.description,
-                relevance_score=comparator_score.relevance_score,
+                relevance_score=comparator_scores.get(comparator.id, comparator_score.relevance_score),
                 relevance_rationale=comparator_score.rationale,
                 linked_study_count=study_counts[comparator.id],
                 linked_candidate_pod_count=candidate_counts[comparator.id],
@@ -474,25 +534,40 @@ def _build_evidence_summary(product: Product) -> EvidenceSummarySection:
     )
 
 
-def _build_candidate_pod_assessment(product: Product) -> CandidatePODAssessmentSection:
-    items = [
-        CandidatePODAssessmentItem(
-            candidate_pod_id=candidate_pod.id,
-            title=candidate_pod.title,
-            claim_text=candidate_pod.claim_text,
-            rationale=candidate_pod.rationale,
-            status=candidate_pod.status,
-            confidence_score=candidate_pod.confidence_score,
-            comparator_name=(
-                candidate_pod.comparator.name if candidate_pod.comparator is not None else None
-            ),
-            linked_finding_title=(
-                candidate_pod.finding.title if candidate_pod.finding is not None else None
-            ),
-            citations=_citations_for_candidate_pod(candidate_pod),
+def _build_candidate_pod_assessment(
+    product: Product,
+    *,
+    comparator_scores: dict[int, float],
+    generated_limitations: dict[int, list[GeneratedLimitation]],
+) -> CandidatePODAssessmentSection:
+    items: list[CandidatePODAssessmentItem] = []
+    for candidate_pod in sorted(product.candidate_pods, key=lambda item: item.title.lower()):
+        support_result = _support_result_for_candidate_pod(
+            candidate_pod=candidate_pod,
+            comparator_scores=comparator_scores,
+            generated_limitations=generated_limitations,
         )
-        for candidate_pod in sorted(product.candidate_pods, key=lambda item: item.title.lower())
-    ]
+        items.append(
+            CandidatePODAssessmentItem(
+                candidate_pod_id=candidate_pod.id,
+                title=candidate_pod.title,
+                claim_text=candidate_pod.claim_text,
+                rationale=candidate_pod.rationale,
+                status=candidate_pod.status,
+                confidence_score=candidate_pod.confidence_score,
+                support_category=support_result.support_category,
+                support_score=support_result.support_score,
+                confidence_rationale=support_result.confidence_rationale,
+                expert_review_required=support_result.expert_review_required,
+                comparator_name=(
+                    candidate_pod.comparator.name if candidate_pod.comparator is not None else None
+                ),
+                linked_finding_title=(
+                    candidate_pod.finding.title if candidate_pod.finding is not None else None
+                ),
+                citations=_citations_for_candidate_pod(candidate_pod),
+            )
+        )
 
     item_citations = [citation for item in items for citation in item.citations]
 
@@ -502,7 +577,11 @@ def _build_candidate_pod_assessment(product: Product) -> CandidatePODAssessmentS
     )
 
 
-def _build_limitations(product: Product) -> LimitationsSection:
+def _build_limitations(
+    product: Product,
+    *,
+    generated_limitations: dict[int, list[GeneratedLimitation]],
+) -> LimitationsSection:
     items: list[ReportLimitationItem] = []
 
     for study in product.studies:
@@ -527,21 +606,12 @@ def _build_limitations(product: Product) -> LimitationsSection:
                 )
             )
 
-    generated_keys: set[tuple[int, str]] = set()
     for candidate_pod in product.candidate_pods:
         study = candidate_pod.finding.study if candidate_pod.finding is not None else None
         if study is None:
             continue
 
-        for generated in generate_rule_based_limitations(
-            study=study,
-            candidate_pod=candidate_pod,
-        ):
-            key = (candidate_pod.id, generated.limitation_type)
-            if key in generated_keys:
-                continue
-
-            generated_keys.add(key)
+        for generated in generated_limitations.get(candidate_pod.id, []):
             items.append(
                 ReportLimitationItem(
                     source="generated",
@@ -575,6 +645,8 @@ def _build_suggested_next_experiments(
     *,
     product: Product,
     limitations: LimitationsSection,
+    comparator_scores: dict[int, float],
+    generated_limitations: dict[int, list[GeneratedLimitation]],
 ) -> SuggestedNextExperimentsSection:
     items: list[SuggestedExperimentItem] = []
     seen_titles: set[str] = set()
@@ -627,9 +699,46 @@ def _build_suggested_next_experiments(
                 rationale=rationale,
                 priority=priority,
                 linked_limitation_title=limitation.title,
+                recommendation_status="suggested",
                 citations=limitation.citations,
             )
         )
+
+    for candidate_pod in sorted(product.candidate_pods, key=lambda item: item.title.lower()):
+        support_result = _support_result_for_candidate_pod(
+            candidate_pod=candidate_pod,
+            comparator_scores=comparator_scores,
+            generated_limitations=generated_limitations,
+        )
+        comparator_score = (
+            comparator_scores.get(candidate_pod.comparator.id)
+            if candidate_pod.comparator is not None
+            else None
+        )
+        generated_recommendations = generate_pod_recommendations(
+            candidate_pod=candidate_pod,
+            support_result=support_result,
+            limitations=generated_limitations.get(candidate_pod.id, []),
+            comparator_relevance_score=comparator_score,
+        )
+
+        for recommendation in generated_recommendations:
+            unique_key = f"pod:{candidate_pod.id}:{recommendation.title}"
+            if unique_key in seen_titles:
+                continue
+
+            seen_titles.add(unique_key)
+            items.append(
+                SuggestedExperimentItem(
+                    source="generated",
+                    title=recommendation.title,
+                    rationale=recommendation.rationale,
+                    priority=recommendation.priority,
+                    linked_limitation_title=recommendation.linked_limitation_title,
+                    recommendation_status=recommendation.recommendation_status,
+                    citations=_citations_for_candidate_pod(candidate_pod),
+                )
+            )
 
     item_citations = [citation for item in items for citation in item.citations]
 
@@ -727,13 +836,27 @@ def generate_product_report(*, db: Session, product_id: int) -> ProductReportRea
         )
 
     product_overview = _build_product_overview(product)
-    comparator_summary = _build_comparator_summary(product)
+    comparator_scores = _score_comparators(product)
+    generated_limitations = _generated_limitations_by_candidate_pod(product)
+    comparator_summary = _build_comparator_summary(
+        product,
+        comparator_scores=comparator_scores,
+    )
     evidence_summary = _build_evidence_summary(product)
-    candidate_pod_assessment = _build_candidate_pod_assessment(product)
-    limitations = _build_limitations(product)
+    candidate_pod_assessment = _build_candidate_pod_assessment(
+        product,
+        comparator_scores=comparator_scores,
+        generated_limitations=generated_limitations,
+    )
+    limitations = _build_limitations(
+        product,
+        generated_limitations=generated_limitations,
+    )
     suggested_next_experiments = _build_suggested_next_experiments(
         product=product,
         limitations=limitations,
+        comparator_scores=comparator_scores,
+        generated_limitations=generated_limitations,
     )
     expert_review_section = _build_expert_review_section(product)
 

@@ -412,6 +412,10 @@ def test_get_product_report_returns_structured_sections_with_citations(client, d
     assert candidate_assessment["items"][0]["title"] == "Lead NOAEL candidate"
     assert isinstance(candidate_assessment["items"][0]["confidence_score"], float)
     assert candidate_assessment["items"][0]["confidence_score"] == 0.85
+    assert candidate_assessment["items"][0]["support_category"] == "explicit_pod_available"
+    assert candidate_assessment["items"][0]["support_score"] == 88.2
+    assert candidate_assessment["items"][0]["expert_review_required"] is True
+    assert "weak comparator relevance" in candidate_assessment["items"][0]["confidence_rationale"]
     assert candidate_assessment["citations"] == []
 
     limitations = payload["limitations"]
@@ -424,6 +428,10 @@ def test_get_product_report_returns_structured_sections_with_citations(client, d
     suggested_next_experiments = payload["suggested_next_experiments"]
     assert suggested_next_experiments["items"][0]["source"] == "recommendation"
     assert suggested_next_experiments["items"][0]["priority"] == "high"
+    assert suggested_next_experiments["items"][1]["title"] == (
+        "Close remaining gaps around the explicit POD"
+    )
+    assert suggested_next_experiments["items"][1]["recommendation_status"] == "suggested"
     assert suggested_next_experiments["citations"] == []
 
     expert_review_section = payload["expert_review_section"]
@@ -486,6 +494,11 @@ def test_get_product_report_integrates_strong_comparator_and_no_limitations(
     assert comparator_item["name"] == "Reference Alpha"
     assert comparator_item["relevance_score"] == 100.0
     assert "strong comparator match" in comparator_item["relevance_rationale"]
+    assert payload["candidate_pod_assessment"]["items"][0]["support_category"] == (
+        "explicit_pod_available"
+    )
+    assert payload["candidate_pod_assessment"]["items"][0]["support_score"] == 99.16
+    assert payload["candidate_pod_assessment"]["items"][0]["expert_review_required"] is False
     assert payload["limitations"] == {
         "items": [],
         "citations": [],
@@ -505,10 +518,18 @@ def test_get_product_report_integrates_weak_comparator_and_multiple_limitations(
     payload = response.json()
     comparator_item = payload["comparator_summary"]["items"][0]
     limitation_titles = {item["title"] for item in payload["limitations"]["items"]}
+    recommendation_titles = {
+        item["title"] for item in payload["suggested_next_experiments"]["items"]
+    }
 
     assert comparator_item["name"] == "Reference Gamma"
     assert comparator_item["relevance_score"] == 5.0
     assert "weak comparator match" in comparator_item["relevance_rationale"]
+    assert payload["candidate_pod_assessment"]["items"][0]["support_category"] == (
+        "analog_supported_provisional_pod"
+    )
+    assert payload["candidate_pod_assessment"]["items"][0]["support_score"] == 0.0
+    assert payload["candidate_pod_assessment"]["items"][0]["expert_review_required"] is True
     assert limitation_titles == {
         "Missing route",
         "Missing species relevance",
@@ -517,6 +538,8 @@ def test_get_product_report_integrates_weak_comparator_and_multiple_limitations(
         "Analog-only evidence",
         "Low extraction confidence",
     }
+    assert "Generate direct product-specific POD confirmation" in recommendation_titles
+    assert "Identify a more relevant comparator or justify the bridge" in recommendation_titles
 
 
 def test_get_product_report_handles_no_comparator_and_no_study_data(
@@ -544,6 +567,14 @@ def test_get_product_report_handles_no_comparator_and_no_study_data(
         "citations": [],
     }
     assert payload["limitations"] == {
+        "items": [],
+        "citations": [],
+    }
+    assert payload["candidate_pod_assessment"] == {
+        "items": [],
+        "citations": [],
+    }
+    assert payload["suggested_next_experiments"] == {
         "items": [],
         "citations": [],
     }
