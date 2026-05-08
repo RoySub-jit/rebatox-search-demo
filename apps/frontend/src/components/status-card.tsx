@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type HealthResponse = {
   status: "ok" | "degraded";
@@ -26,7 +26,7 @@ type LoadState =
 export function StatusCard({ apiBaseUrl }: StatusCardProps) {
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
 
-  const loadHealth = useEffectEvent(async () => {
+  const loadHealth = useCallback(async () => {
     setLoadState({ kind: "loading" });
 
     try {
@@ -42,11 +42,11 @@ export function StatusCard({ apiBaseUrl }: StatusCardProps) {
 
       setLoadState({ kind: "error", message });
     }
-  });
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     void loadHealth();
-  }, [apiBaseUrl]);
+  }, [loadHealth]);
 
   if (loadState.kind === "loading") {
     return (

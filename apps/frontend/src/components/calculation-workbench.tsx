@@ -1,8 +1,8 @@
 "use client";
 
 import {
+  useCallback,
   startTransition,
-  useEffectEvent,
   useState,
 } from "react";
 
@@ -319,12 +319,13 @@ export function CalculationWorkbench({
 
   const payloadPreview = createPayload(runType, fieldValues, linkValues);
 
-  const submitRun = useEffectEvent(async () => {
+  const submitRun = useCallback(async () => {
     setIsSubmitting(true);
     setRequestError(null);
 
     try {
-      const response = await runCalculation(apiBaseUrl, payloadPreview);
+      const payload = createPayload(runType, fieldValues, linkValues);
+      const response = await runCalculation(apiBaseUrl, payload);
       startTransition(() => {
         setActiveRun(response);
         setRunId(response.id);
@@ -334,9 +335,9 @@ export function CalculationWorkbench({
     } finally {
       setIsSubmitting(false);
     }
-  });
+  }, [apiBaseUrl, fieldValues, linkValues, runType]);
 
-  const reloadRun = useEffectEvent(async () => {
+  const reloadRun = useCallback(async () => {
     if (!runId) {
       return;
     }
@@ -354,7 +355,7 @@ export function CalculationWorkbench({
     } finally {
       setIsReloading(false);
     }
-  });
+  }, [apiBaseUrl, runId]);
 
   return (
     <section className="calculation-grid">

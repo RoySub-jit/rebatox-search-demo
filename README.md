@@ -97,6 +97,34 @@ source .venv/bin/activate
 pytest
 ```
 
+## Demo Seed
+
+To reset the local database and load a full reviewer demo dataset with
+`productId=1`:
+
+```bash
+cd apps/backend
+source .venv/bin/activate
+python scripts/seed_demo_report.py
+```
+
+This seeds:
+
+- one product
+- one comparator
+- one source document and citation span
+- one study and finding
+- one candidate POD
+- one limitation
+- one recommendation
+- one calculation run
+- one expert review
+
+After seeding, open:
+
+- `http://localhost:3000/report?productId=1`
+- `http://localhost:3000/calculations`
+
 ## Frontend: Local Node Workflow
 
 ```bash

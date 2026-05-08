@@ -1,9 +1,9 @@
 "use client";
 
 import {
+  useCallback,
   startTransition,
   useEffect,
-  useEffectEvent,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -111,7 +111,7 @@ export function ExpertReviewPanel({
     setRequestError(null);
   }, [candidatePod, latestReview]);
 
-  const saveReview = useEffectEvent(async () => {
+  const saveReview = useCallback(async () => {
     if (!draft.reviewerName.trim()) {
       setRequestError("Reviewer name is required before saving.");
       return;
@@ -155,7 +155,13 @@ export function ExpertReviewPanel({
     } finally {
       setIsSubmitting(false);
     }
-  });
+  }, [
+    apiBaseUrl,
+    candidatePod.candidate_pod_id,
+    draft,
+    latestReview,
+    router,
+  ]);
 
   return (
     <section className="task-item expert-review-panel">
