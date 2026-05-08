@@ -84,6 +84,43 @@ export type SupportCategory =
   | "analog_supported_provisional_pod"
   | "insufficient_public_data_for_pod";
 
+export type MoleculeSearchResultResponse = {
+  provider: "dailymed" | "openfda" | "pubmed";
+  external_id: string;
+  title: string;
+  generic_name: string | null;
+  brand_names: string[];
+  manufacturer_names: string[];
+  routes: string[];
+  substance_names: string[];
+  product_type: string | null;
+  published_at: string | null;
+  summary: string | null;
+  source_uri: string | null;
+  identifiers: {
+    namespace: string;
+    value: string;
+  }[];
+};
+
+export type MoleculeSearchResponse = {
+  query: string;
+  limit: number;
+  total_results: number;
+  items: MoleculeSearchResultResponse[];
+};
+
+export type MoleculeLabelSectionResponse = {
+  key: string;
+  title: string;
+  content: string[];
+};
+
+export type MoleculeDetailResponse = {
+  molecule: MoleculeSearchResultResponse;
+  sections: MoleculeLabelSectionResponse[];
+};
+
 export type ReportLimitationItemResponse = {
   source: "persisted" | "generated" | "recommendation";
   title: string;
@@ -352,6 +389,39 @@ export function updateExpertReview(
     {
       method: "PUT",
       body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function searchMolecules(
+  apiBaseUrl: string,
+  query: string,
+  limit = 10,
+) {
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+  });
+
+  return requestJson<MoleculeSearchResponse>(
+    apiBaseUrl,
+    `/api/v1/molecule-search?${params.toString()}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function getMoleculeDetail(
+  apiBaseUrl: string,
+  provider: MoleculeSearchResultResponse["provider"],
+  externalId: string,
+) {
+  return requestJson<MoleculeDetailResponse>(
+    apiBaseUrl,
+    `/api/v1/molecule-search/${provider}/${encodeURIComponent(externalId)}`,
+    {
+      method: "GET",
     },
   );
 }

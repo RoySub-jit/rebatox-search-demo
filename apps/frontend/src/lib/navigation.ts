@@ -1,5 +1,11 @@
 export const workspaceNavItems = [
   {
+    href: "/search",
+    label: "Molecule search",
+    shortLabel: "00",
+    description: "Search live label metadata by brand, generic, or substance name.",
+  },
+  {
     href: "/product-overview",
     label: "Product overview",
     shortLabel: "01",

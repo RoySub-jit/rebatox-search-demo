@@ -23,7 +23,9 @@ export function WorkspaceNav() {
 
       <nav className="nav-stack" aria-label="Primary">
         {workspaceNavItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive =
+            pathname === item.href ||
+            (item.href === "/search" && pathname === "/molecule");
 
           return (
             <Link
