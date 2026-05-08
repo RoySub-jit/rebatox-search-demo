@@ -64,6 +64,21 @@ const SUPPORT_CATEGORY_LABELS: Record<string, string> = {
   insufficient_public_data_for_pod: "Insufficient public data",
 };
 
+const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
 export function formatNumericScore(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "—";
@@ -82,13 +97,17 @@ export function formatDateTime(value: string | null | undefined): string {
     return value;
   }
 
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const month = MONTH_LABELS[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  const displayHour = hours % 12 || 12;
+
+  // Build a deterministic string so SSR and client hydration do not depend on
+  // runtime-specific locale punctuation such as "," versus "at".
+  return `${month} ${day}, ${year}, ${displayHour}:${minutes} ${meridiem}`;
 }
 
 export function getSupportCategoryLabel(category: string): string {

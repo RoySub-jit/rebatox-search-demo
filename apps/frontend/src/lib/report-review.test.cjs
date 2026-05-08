@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildCitationPanelModels,
   buildReviewMetrics,
+  formatDateTime,
   getCandidatePodReviewState,
   getSparseReportState,
   getSupportCategoryLabel,
@@ -209,6 +210,15 @@ test("report-review helpers flag sparse report empty states", () => {
     metrics.map((item) => item.value),
     ["0", "0", "0", "0"],
   );
+});
+
+test("report-review helpers format timestamps deterministically", () => {
+  assert.equal(
+    formatDateTime("2024-03-01T00:00:00"),
+    "Mar 1, 2024, 12:00 AM",
+  );
+  assert.equal(formatDateTime(null), "Not recorded");
+  assert.equal(formatDateTime("not-a-date"), "not-a-date");
 });
 
 test("report-review helpers build expandable citation panel models", () => {
