@@ -125,6 +125,29 @@ After seeding, open:
 - `http://localhost:3000/report?productId=1`
 - `http://localhost:3000/calculations`
 
+## Fast Demo Path
+
+If you want the fastest end-to-end local demo on this laptop, use the SQLite
+demo backend instead of local PostgreSQL:
+
+```bash
+cd apps/backend
+bash scripts/run_demo_backend.sh
+```
+
+That command will:
+
+- create or reuse `.venv`
+- install backend dependencies
+- create a local SQLite demo database at `apps/backend/rebatox_demo.db`
+- reset and seed the demo data with `productId=1`
+- start the FastAPI server on `http://localhost:8000`
+
+Then open:
+
+- `http://localhost:3000/report?productId=1`
+- `http://localhost:3000/calculations`
+
 ## Frontend: Local Node Workflow
 
 ```bash

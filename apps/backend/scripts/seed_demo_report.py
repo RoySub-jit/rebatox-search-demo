@@ -46,7 +46,10 @@ def _reset_database(db) -> None:
         db.execute(table.delete())
 
     if dialect == "sqlite":
-        db.execute(text("DELETE FROM sqlite_sequence"))
+        try:
+            db.execute(text("DELETE FROM sqlite_sequence"))
+        except OperationalError:
+            pass
 
     db.commit()
 

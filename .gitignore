@@ -22,3 +22,6 @@ out/
 
 # Docker
 postgres_data/
+
+# Demo database
+apps/backend/rebatox_demo.db
