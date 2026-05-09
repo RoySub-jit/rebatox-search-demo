@@ -4,4 +4,5 @@ export const appConfig = {
     /\/$/,
     "",
   ),
+  publicDemoMode: process.env.NEXT_PUBLIC_PUBLIC_DEMO_MODE === "true",
 };

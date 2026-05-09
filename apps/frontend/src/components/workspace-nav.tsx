@@ -8,6 +8,9 @@ import { workspaceNavItems } from "@/lib/navigation";
 
 export function WorkspaceNav() {
   const pathname = usePathname();
+  const navItems = appConfig.publicDemoMode
+    ? workspaceNavItems.filter((item) => item.href === "/search")
+    : workspaceNavItems;
 
   return (
     <aside className="workspace-sidebar">
@@ -22,7 +25,7 @@ export function WorkspaceNav() {
       </div>
 
       <nav className="nav-stack" aria-label="Primary">
-        {workspaceNavItems.map((item) => {
+        {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href === "/search" && pathname === "/molecule");
@@ -47,6 +50,16 @@ export function WorkspaceNav() {
         <div className="sidebar-note-label">Backend</div>
         <code>{appConfig.apiBaseUrl}</code>
       </div>
+
+      {appConfig.publicDemoMode ? (
+        <div className="sidebar-note">
+          <div className="sidebar-note-label">Mode</div>
+          <div className="nav-copy">
+            Public search demo with live source lookup. Internal report workflow is
+            intentionally hidden in this hosted view.
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }

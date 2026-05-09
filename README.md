@@ -148,6 +148,17 @@ Then open:
 - `http://localhost:3000/report?productId=1`
 - `http://localhost:3000/calculations`
 
+## Hosted Search Demo
+
+If you want a stable external URL for stewardship reviewers, the shortest path is:
+
+- frontend on Vercel
+- backend on Render
+
+That hosted path is currently designed around the live molecule search workflow
+in this branch. See [DEPLOY.md](./DEPLOY.md) for the exact setup steps,
+environment variables, and platform notes.
+
 ## Frontend: Local Node Workflow
 
 ```bash
