@@ -319,6 +319,26 @@ def _infer_focus(entity_type: EntityType, abstract_text: str, query: str | None)
     return "Molecule-related literature"
 
 
+def _normalize_pod_term(value: str) -> str:
+    upper_value = value.upper()
+    if upper_value in {"NOAEL", "LOAEL", "POD", "BMD", "BMDL", "MTD"}:
+        return upper_value
+    return value.title()
+
+
+def _build_pod_candidate_summary(sentence: str) -> str | None:
+    pod_match = POD_PATTERN.search(sentence)
+    if pod_match is None:
+        return None
+
+    pod_term = _normalize_pod_term(pod_match.group(0))
+    dose_match = DOSE_PATTERN.search(sentence)
+    if dose_match is not None:
+        return f"{pod_term} candidate at {dose_match.group(0)}"
+
+    return f"{pod_term} referenced in abstract"
+
+
 def _build_pubmed_signals(
     *,
     entity_type: EntityType,
@@ -418,6 +438,17 @@ def _build_pubmed_signals(
                 confidence="medium",
             )
         )
+        pod_candidate = _build_pod_candidate_summary(pod_sentence)
+        if pod_candidate:
+            signals.append(
+                LiveWorkspaceExtractedSignal(
+                    key="pod_candidate",
+                    label="Potential POD candidate",
+                    value=pod_candidate,
+                    source_section_key="abstract",
+                    confidence="high" if DOSE_PATTERN.search(pod_sentence) else "medium",
+                )
+            )
 
     exposure_sentence = next(
         (sentence for sentence in abstract_sentences if EXPOSURE_PATTERN.search(sentence)),

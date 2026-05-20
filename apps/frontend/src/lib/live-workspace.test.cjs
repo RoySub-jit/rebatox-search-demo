@@ -2,6 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  buildPodCurationRows,
   buildWorkspaceOverviewRows,
   formatPublishedAt,
   getPrimarySearchResult,
@@ -197,4 +198,75 @@ test("live-workspace helpers build overview rows for molecule and literature mod
   assert.equal(literatureRows[0].value, "Journal of Safety");
   assert.equal(formatPublishedAt("2026-04-24"), "2026-04-24");
   assert.equal(formatPublishedAt(null), "Not reported");
+});
+
+test("live-workspace helpers build a POD curation snapshot from extracted signals", () => {
+  const rows = buildPodCurationRows({
+    entity_type: "molecule",
+    query: "aspirin",
+    record: {
+      entity_type: "molecule",
+      provider: "pubmed",
+      external_id: "12345",
+      title: "Aspirin Review",
+      subtitle: "Journal of Safety",
+      summary: "Lead author: Doe J",
+      document_type: "journal_article",
+      published_at: "2025-06-01",
+      source_uri: "https://pubmed.ncbi.nlm.nih.gov/12345/",
+      identifiers: [],
+      generic_name: null,
+      brand_names: [],
+      manufacturer_names: [],
+      routes: ["ORAL"],
+      substance_names: [],
+      product_type: null,
+      authors: ["Doe J"],
+      journal: "Journal of Safety",
+      keywords: ["aspirin"],
+    },
+    sections: [],
+    extracted_signals: [
+      {
+        key: "pod_candidate",
+        label: "Potential POD candidate",
+        value: "NOAEL candidate at 50 mg/kg/day",
+        source_section_key: "abstract",
+        confidence: "high",
+      },
+      {
+        key: "exposure_signal",
+        label: "Exposure signal",
+        value: "Systemic exposure was monitored.",
+        source_section_key: "abstract",
+        confidence: "medium",
+      },
+      {
+        key: "study_model",
+        label: "Study model",
+        value: "Human / clinical",
+        source_section_key: "publication_types",
+        confidence: "medium",
+      },
+      {
+        key: "toxicology_takeaway",
+        label: "Toxicology takeaway",
+        value: "Dose context and explicit POD language were both identified.",
+        source_section_key: "abstract",
+        confidence: "high",
+      },
+    ],
+    review_cue: {
+      title: "Literature-backed evidence review",
+      description: "Review the live article.",
+    },
+    retrieval_mode: "live",
+    retrieved_at: "2026-05-08T12:00:00Z",
+  });
+
+  assert.equal(rows[0].label, "Potential POD candidate");
+  assert.match(rows[0].value, /NOAEL candidate/);
+  assert.equal(rows[3].label, "Route context");
+  assert.equal(rows[3].value, "ORAL");
+  assert.equal(rows[5].label, "Curation takeaway");
 });

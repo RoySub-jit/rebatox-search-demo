@@ -26,6 +26,12 @@ export type WorkspaceOverviewRow = {
   value: string;
 };
 
+export type PodCurationRow = {
+  label: string;
+  value: string;
+  note: string;
+};
+
 export const SEARCH_MODE_CONFIGS: SearchModeConfig[] = [
   {
     value: "molecule",
@@ -173,5 +179,73 @@ export function buildWorkspaceOverviewRows(
     { label: "Document type", value: record.document_type ?? "Not reported" },
     { label: "Keywords", value: joinOrDefault(record.keywords) },
     { label: "Published date", value: formatPublishedAt(record.published_at) },
+  ];
+}
+
+function getSignalValue(
+  workspace: LiveWorkspaceResponse,
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    const signal = workspace.extracted_signals.find((item) => item.key === key);
+    if (signal?.value) {
+      return signal.value;
+    }
+  }
+
+  return null;
+}
+
+export function buildPodCurationRows(
+  workspace: LiveWorkspaceResponse,
+): PodCurationRow[] {
+  const routeValue =
+    getSignalValue(workspace, "route_mentions", "route") ??
+    (workspace.record.routes.length > 0 ? workspace.record.routes.join(", ") : "Not detected");
+  const doseValue =
+    getSignalValue(workspace, "pod_candidate", "dose_or_exposure_context", "dose_sentence") ??
+    "No explicit dose cue detected";
+  const podValue =
+    getSignalValue(workspace, "pod_candidate", "pod_signal") ??
+    "No explicit POD candidate detected";
+  const exposureValue =
+    getSignalValue(workspace, "exposure_signal") ?? "No explicit exposure cue detected";
+  const studyModelValue =
+    getSignalValue(workspace, "study_model") ?? "Study model not inferred";
+  const takeawayValue =
+    getSignalValue(workspace, "toxicology_takeaway") ??
+    "Structured toxicology takeaway not inferred from the current source.";
+
+  return [
+    {
+      label: "Potential POD candidate",
+      value: podValue,
+      note: "Explicit POD language or a candidate cue extracted from the current source.",
+    },
+    {
+      label: "Dose context",
+      value: doseValue,
+      note: "Dose or regimen language surfaced for rapid toxicology review.",
+    },
+    {
+      label: "Exposure context",
+      value: exposureValue,
+      note: "Exposure-related language that may support relevance or bridge interpretation.",
+    },
+    {
+      label: "Route context",
+      value: routeValue,
+      note: "Route signal from the live source or its extracted evidence cues.",
+    },
+    {
+      label: "Study model",
+      value: studyModelValue,
+      note: "Best inferred study model from the current literature or label record.",
+    },
+    {
+      label: "Curation takeaway",
+      value: takeawayValue,
+      note: "A reviewer-facing interpretation of how actionable the current source looks for POD curation.",
+    },
   ];
 }

@@ -1242,6 +1242,34 @@ pre {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.curation-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.curation-card {
+  display: grid;
+  gap: 10px;
+  min-height: 188px;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 248, 251, 0.88));
+}
+
+.curation-card strong {
+  font-size: 1.08rem;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+}
+
+.curation-note {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
 .review-section-stack {
   gap: 14px;
 }
@@ -1421,6 +1449,7 @@ pre {
   .review-overview-grid,
   .review-body-grid,
   .audit-grid,
+  .curation-grid,
   .workspace-spotlight-grid,
   .search-result-meta {
     grid-template-columns: 1fr;

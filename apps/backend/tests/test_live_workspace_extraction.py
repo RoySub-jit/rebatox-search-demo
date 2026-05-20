@@ -141,6 +141,7 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
     assert "dose_or_exposure_context" in signal_keys
     assert "dose_sentence" in signal_keys
     assert "pod_signal" in signal_keys
+    assert "pod_candidate" in signal_keys
     assert "exposure_signal" in signal_keys
     assert "toxicology_takeaway" in signal_keys
     assert "publication_type" in signal_keys

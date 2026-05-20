@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { appConfig } from "@/lib/config";
 import {
+  buildPodCurationRows,
   buildWorkspaceOverviewRows,
   formatPublishedAt,
   getProviderLabel,
@@ -132,6 +133,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
 
     const modeConfig = getSearchModeConfig(entityType as LiveWorkspaceResponse["entity_type"]);
     const overviewRows = buildWorkspaceOverviewRows(workspace);
+    const podCurationRows = buildPodCurationRows(workspace);
     const backToSearchHref = buildBackToSearchHref(entityType, activeQuery);
     const workspaceStateLabel = savedWorkspace ? "Saved reviewer snapshot" : "Live source workspace";
 
@@ -309,6 +311,30 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
               </div>
             </div>
           </article>
+        </section>
+
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2>POD curation snapshot</h2>
+              <p className="empty-copy">
+                Structured curation cues surfaced ahead of the full signal list so a
+                reviewer can quickly judge whether this source is actionable for dose,
+                POD, and risk interpretation.
+              </p>
+            </div>
+            <StatusBadge tone="info">Curation-ready view</StatusBadge>
+          </div>
+
+          <div className="curation-grid">
+            {podCurationRows.map((row) => (
+              <article key={row.label} className="curation-card">
+                <span className="overview-label">{row.label}</span>
+                <strong>{row.value}</strong>
+                <p className="curation-note">{row.note}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section className="card">
