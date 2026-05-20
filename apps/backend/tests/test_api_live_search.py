@@ -44,9 +44,9 @@ def test_live_search_route_returns_mixed_results(client, monkeypatch) -> None:
         return LiveSearchResponse(
             entity_type="molecule",
             query=query,
-            sources=["openfda", "dailymed", "pubmed"],
+            sources=["openfda", "dailymed", "pubchem", "pubmed", "echa"],
             limit=limit,
-            total_results=3,
+            total_results=5,
             items=[
                 _build_result(
                     entity_type="molecule",
@@ -62,9 +62,21 @@ def test_live_search_route_returns_mixed_results(client, monkeypatch) -> None:
                 ),
                 _build_result(
                     entity_type="molecule",
+                    provider="pubchem",
+                    external_id="2244",
+                    title="Aspirin",
+                ),
+                _build_result(
+                    entity_type="molecule",
                     provider="pubmed",
                     external_id="12345",
                     title="Aspirin literature note",
+                ),
+                _build_result(
+                    entity_type="molecule",
+                    provider="echa",
+                    external_id="molecule:aspirin",
+                    title="ECHA lookup: aspirin",
                 ),
             ],
         )
@@ -78,9 +90,10 @@ def test_live_search_route_returns_mixed_results(client, monkeypatch) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["sources"] == ["openfda", "dailymed", "pubmed"]
+    assert payload["sources"] == ["openfda", "dailymed", "pubchem", "pubmed", "echa"]
     assert payload["items"][1]["provider"] == "dailymed"
-    assert payload["items"][2]["provider"] == "pubmed"
+    assert payload["items"][2]["provider"] == "pubchem"
+    assert payload["items"][3]["provider"] == "pubmed"
 
 
 def test_live_search_route_returns_error_for_invalid_source(client) -> None:
@@ -181,6 +194,48 @@ def test_live_workspace_resolve_route_supports_dailymed(client, monkeypatch) -> 
     payload = response.json()
     assert payload["record"]["provider"] == "dailymed"
     assert payload["review_cue"]["title"] == "DailyMed label review"
+
+
+def test_live_workspace_resolve_route_supports_pubchem(client, monkeypatch) -> None:
+    def fake_resolve(request) -> LiveWorkspaceResponse:
+        assert request.entity_type == "molecule"
+        assert request.provider == "pubchem"
+        assert request.external_id == "2244"
+        return LiveWorkspaceResponse(
+            entity_type="molecule",
+            query=request.query,
+            record=_build_result(
+                entity_type="molecule",
+                provider="pubchem",
+                external_id="2244",
+                title="Aspirin",
+            ),
+            sections=[],
+            review_cue=LiveWorkspaceReviewCue(
+                title="Chemical identity and hazard review",
+                description="Review the PubChem workspace before saving it.",
+            ),
+            retrieved_at=datetime(2026, 5, 8, tzinfo=timezone.utc),
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.workspaces.resolve_live_workspace",
+        fake_resolve,
+    )
+
+    response = client.post(
+        "/api/v1/workspaces/resolve",
+        json={
+            "entity_type": "molecule",
+            "provider": "pubchem",
+            "external_id": "2244",
+            "query": "aspirin",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["record"]["provider"] == "pubchem"
 
 
 def test_live_workspace_resolve_route_returns_not_found(client, monkeypatch) -> None:

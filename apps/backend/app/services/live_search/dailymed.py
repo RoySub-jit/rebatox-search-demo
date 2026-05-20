@@ -18,6 +18,7 @@ from app.schemas.live_search import (
     LiveWorkspaceSection,
 )
 from app.schemas.source_ingestion import SourceRecordIdentifier
+from app.services.live_search.pod_analysis import build_pod_analysis
 from app.services.source_ingestion.common import dedupe_texts, parse_date_value
 
 DAILYMED_SPLS_ENDPOINT = "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json"
@@ -431,18 +432,26 @@ def resolve_dailymed_workspace(
     )
     source_uri = f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={external_id}"
 
+    record = _build_result_from_detail(
+        entity_type=entity_type,
+        setid=external_id,
+        detail=detail,
+        source_uri=source_uri,
+        summary=summary,
+    )
+    extracted_signals = _build_dailymed_signals(detail=detail, sections=sections)
+
     return LiveWorkspaceResponse(
         entity_type=entity_type,
         query=query,
-        record=_build_result_from_detail(
-            entity_type=entity_type,
-            setid=external_id,
-            detail=detail,
-            source_uri=source_uri,
-            summary=summary,
-        ),
+        record=record,
         sections=sections,
-        extracted_signals=_build_dailymed_signals(detail=detail, sections=sections),
+        extracted_signals=extracted_signals,
+        pod_analysis=build_pod_analysis(
+            record=record,
+            sections=sections,
+            extracted_signals=extracted_signals,
+        ),
         review_cue=LiveWorkspaceReviewCue(
             title="DailyMed label review",
             description=(

@@ -17,9 +17,14 @@ from app.services.live_search.dailymed import (
     resolve_dailymed_workspace,
     search_dailymed_records,
 )
+from app.services.live_search.echa import resolve_echa_workspace, search_echa_records
 from app.services.live_search.openfda import (
     resolve_openfda_workspace,
     search_openfda_records,
+)
+from app.services.live_search.pubchem import (
+    resolve_pubchem_workspace,
+    search_pubchem_records,
 )
 from app.services.live_search.pubmed import (
     resolve_pubmed_workspace,
@@ -31,9 +36,9 @@ WORKSPACE_TTL_SECONDS = 24 * 60 * 60
 NON_ALNUM_PATTERN = re.compile(r"[^a-z0-9]+")
 
 SUPPORTED_SOURCES_BY_ENTITY: dict[EntityType, tuple[SourceProviderName, ...]] = {
-    "molecule": ("openfda", "dailymed", "pubmed"),
-    "degradant": ("pubmed",),
-    "el": ("pubmed",),
+    "molecule": ("openfda", "dailymed", "pubchem", "pubmed", "echa"),
+    "degradant": ("pubmed", "echa"),
+    "el": ("pubmed", "echa"),
 }
 
 
@@ -76,8 +81,12 @@ def _search_single_source(
         return search_openfda_records(entity_type=entity_type, query=query, limit=limit)
     if source == "dailymed":
         return search_dailymed_records(entity_type=entity_type, query=query, limit=limit)
+    if source == "pubchem":
+        return search_pubchem_records(entity_type=entity_type, query=query, limit=limit)
     if source == "pubmed":
         return search_pubmed_records(entity_type=entity_type, query=query, limit=limit)
+    if source == "echa":
+        return search_echa_records(entity_type=entity_type, query=query, limit=limit)
 
     raise ValueError(f"Provider '{source}' is not yet supported for live search.")
 
@@ -145,7 +154,7 @@ def _collapse_molecule_results(
     seen_by_provider_key: dict[tuple[str, str], LiveSearchResult] = {}
 
     for item in items:
-        if item.provider not in {"openfda", "dailymed"}:
+        if item.provider not in {"openfda", "dailymed", "pubchem"}:
             deduped.append(item)
             continue
 
@@ -167,7 +176,7 @@ def _collapse_molecule_results(
         reverse=True,
     )
 
-    non_label_items = [item for item in deduped if item.provider not in {"openfda", "dailymed"}]
+    non_label_items = [item for item in deduped if item.provider not in {"openfda", "dailymed", "pubchem"}]
     return ordered_label_items + non_label_items
 
 
@@ -254,8 +263,20 @@ def resolve_live_workspace(
                 external_id=request.external_id,
                 query=request.query,
             )
+        if provider == "pubchem":
+            return resolve_pubchem_workspace(
+                entity_type=request.entity_type,
+                external_id=request.external_id,
+                query=request.query,
+            )
         if provider == "pubmed":
             return resolve_pubmed_workspace(
+                entity_type=request.entity_type,
+                external_id=request.external_id,
+                query=request.query,
+            )
+        if provider == "echa":
+            return resolve_echa_workspace(
                 entity_type=request.entity_type,
                 external_id=request.external_id,
                 query=request.query,

@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SourceProviderName = Literal["dailymed", "openfda", "pubmed"]
+SourceProviderName = Literal["dailymed", "openfda", "pubmed", "pubchem", "echa"]
 
 
 class SourceRecordIdentifier(BaseModel):

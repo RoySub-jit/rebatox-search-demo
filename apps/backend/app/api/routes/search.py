@@ -20,7 +20,7 @@ def _parse_sources(value: str | None) -> list[SourceProviderName] | None:
     items: list[SourceProviderName] = []
     for raw_item in value.split(","):
         item = raw_item.strip().lower()
-        if item not in {"dailymed", "openfda", "pubmed"}:
+        if item not in {"dailymed", "openfda", "pubmed", "pubchem", "echa"}:
             raise ValueError(f"Unsupported source provider '{raw_item.strip()}'.")
         items.append(item)  # type: ignore[arg-type]
 

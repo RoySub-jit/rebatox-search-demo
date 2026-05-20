@@ -1,8 +1,7 @@
 from __future__ import annotations
-
 from xml.etree import ElementTree
 
-from app.services.live_search import dailymed, pubmed
+from app.services.live_search import dailymed, pubchem, pubmed
 
 
 def test_resolve_dailymed_workspace_extracts_label_signals(monkeypatch) -> None:
@@ -78,6 +77,7 @@ def test_resolve_dailymed_workspace_extracts_label_signals(monkeypatch) -> None:
         "warning_signal",
         "manufacturer",
     ]
+    assert workspace.pod_analysis.primary_candidate is None
 
 
 def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> None:
@@ -145,3 +145,73 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
     assert "exposure_signal" in signal_keys
     assert "toxicology_takeaway" in signal_keys
     assert "publication_type" in signal_keys
+    assert workspace.pod_analysis.primary_candidate is not None
+    assert workspace.pod_analysis.primary_candidate.pod_term == "NOAEL"
+    assert workspace.pod_analysis.derived_calculations[0].label == "50 kg screening conversion"
+
+
+def test_resolve_pubchem_workspace_extracts_identity_and_hazard_signals(monkeypatch) -> None:
+    def fake_fetch_json(url: str):
+        if "property" in url:
+            return {
+                "PropertyTable": {
+                    "Properties": [
+                        {
+                            "CID": 2244,
+                            "Title": "Aspirin",
+                            "MolecularFormula": "C9H8O4",
+                            "MolecularWeight": "180.16",
+                            "ConnectivitySMILES": "CC(=O)OC1=CC=CC=C1C(=O)O",
+                            "InChIKey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
+                            "IUPACName": "2-acetyloxybenzoic acid",
+                            "XLogP": 1.2,
+                            "TPSA": 63.6,
+                        }
+                    ]
+                }
+            }
+        if "synonyms" in url:
+            return {
+                "InformationList": {
+                    "Information": [
+                        {"CID": 2244, "Synonym": ["aspirin", "ACETYLSALICYLIC ACID", "Ecotrin"]}
+                    ]
+                }
+            }
+        return {
+            "Record": {
+                "Section": [
+                    {
+                        "TOCHeading": "Toxicity",
+                        "Section": [
+                            {
+                                "TOCHeading": "Toxicity Summary",
+                                "Information": [
+                                    {
+                                        "Value": {
+                                            "StringWithMarkup": [
+                                                {"String": "Overdose can cause salicylate toxicity."}
+                                            ]
+                                        }
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+
+    monkeypatch.setattr(pubchem, "_fetch_json", fake_fetch_json)
+
+    workspace = pubchem.resolve_pubchem_workspace(
+        entity_type="molecule",
+        external_id="2244",
+        query="aspirin",
+    )
+
+    signal_keys = [signal.key for signal in workspace.extracted_signals]
+    assert workspace.record.provider == "pubchem"
+    assert "molecular_formula" in signal_keys
+    assert "toxicity_signal" in signal_keys
+    assert workspace.sections[0].title == "Chemical profile"

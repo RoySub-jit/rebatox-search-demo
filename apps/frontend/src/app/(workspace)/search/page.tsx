@@ -56,8 +56,8 @@ function getModeHighlights(mode: SearchModeConfig) {
     return [
       {
         label: "Live sources",
-        value: "openFDA, DailyMed, PubMed",
-        copy: "Blend label-backed records and literature so a reviewer can start with the strongest current public evidence.",
+        value: "openFDA, DailyMed, PubChem, PubMed, ECHA",
+        copy: "Blend label-backed records, chemical identity data, literature, and regulatory context so a reviewer can start with the strongest current public evidence.",
       },
       {
         label: "Workspace output",
@@ -76,8 +76,8 @@ function getModeHighlights(mode: SearchModeConfig) {
     return [
       {
         label: "Live sources",
-        value: "PubMed-first literature retrieval",
-        copy: "Search degradant-relevant abstracts and normalize them into a transient review workspace with source provenance intact.",
+        value: "PubMed plus ECHA regulatory lookup",
+        copy: "Search degradant-relevant abstracts and add a regulatory handoff path for classification-oriented follow-up.",
       },
       {
         label: "Workspace output",
@@ -95,8 +95,8 @@ function getModeHighlights(mode: SearchModeConfig) {
   return [
     {
       label: "Live sources",
-      value: "PubMed-driven topic retrieval",
-      copy: "Search public literature for extractables and leachables topics with a structured review shell instead of ad hoc browsing.",
+      value: "PubMed plus ECHA regulatory lookup",
+      copy: "Search public literature for extractables and leachables topics and keep a direct regulatory lookup path available inside the same workflow.",
     },
     {
       label: "Workspace output",

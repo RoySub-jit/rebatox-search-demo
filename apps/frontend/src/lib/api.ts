@@ -85,10 +85,11 @@ export type SupportCategory =
   | "insufficient_public_data_for_pod";
 
 export type SearchEntityType = "molecule" | "degradant" | "el";
+export type LiveSourceProvider = "dailymed" | "openfda" | "pubmed" | "pubchem" | "echa";
 
 export type LiveSearchResultResponse = {
   entity_type: SearchEntityType;
-  provider: "dailymed" | "openfda" | "pubmed";
+  provider: LiveSourceProvider;
   external_id: string;
   title: string;
   subtitle: string | null;
@@ -114,7 +115,7 @@ export type LiveSearchResultResponse = {
 export type LiveSearchResponse = {
   entity_type: SearchEntityType;
   query: string;
-  sources: ("dailymed" | "openfda" | "pubmed")[];
+  sources: LiveSourceProvider[];
   limit: number;
   total_results: number;
   items: LiveSearchResultResponse[];
@@ -134,12 +135,41 @@ export type LiveWorkspaceExtractedSignalResponse = {
   confidence: "high" | "medium" | "low";
 };
 
+export type LiveWorkspaceDoseCandidateResponse = {
+  dose_text: string;
+  dose_value: number | null;
+  unit: string | null;
+  pod_term: string | null;
+  species: string | null;
+  route: string | null;
+  duration: string | null;
+  sentence: string;
+  confidence: "high" | "medium" | "low";
+};
+
+export type LiveWorkspaceDerivedCalculationResponse = {
+  key: string;
+  label: string;
+  formula: string;
+  result_text: string;
+  unit: string | null;
+  assumptions: string[];
+};
+
+export type LiveWorkspacePodAnalysisResponse = {
+  primary_candidate: LiveWorkspaceDoseCandidateResponse | null;
+  candidates: LiveWorkspaceDoseCandidateResponse[];
+  derived_calculations: LiveWorkspaceDerivedCalculationResponse[];
+  warnings: string[];
+};
+
 export type LiveWorkspaceResponse = {
   entity_type: SearchEntityType;
   query: string | null;
   record: LiveSearchResultResponse;
   sections: LiveWorkspaceSectionResponse[];
   extracted_signals: LiveWorkspaceExtractedSignalResponse[];
+  pod_analysis: LiveWorkspacePodAnalysisResponse;
   review_cue: {
     title: string;
     description: string;

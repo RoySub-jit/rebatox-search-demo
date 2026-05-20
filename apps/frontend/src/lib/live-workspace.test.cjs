@@ -73,6 +73,7 @@ test("live-workspace helpers group mixed-source results", () => {
   assert.equal(grouped[0].label, "openFDA");
   assert.equal(grouped[1].label, "PubMed");
   assert.equal(getProviderLabel("openfda"), "openFDA");
+  assert.equal(getProviderLabel("pubchem"), "PubChem");
 });
 
 test("live-workspace helpers choose a primary match for direct opening", () => {
@@ -123,6 +124,15 @@ test("live-workspace helpers choose a primary match for direct opening", () => {
 
   assert.equal(getPrimarySearchResult("molecule", items)?.provider, "openfda");
   assert.equal(getPrimarySearchResult("degradant", items)?.provider, "pubmed");
+  assert.equal(
+    getPrimarySearchResult("molecule", [
+      {
+        ...items[0],
+        provider: "pubchem",
+      },
+    ])?.provider,
+    "pubchem",
+  );
 });
 
 test("live-workspace helpers build overview rows for molecule and literature modes", () => {

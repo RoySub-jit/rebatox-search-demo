@@ -19,6 +19,7 @@ from app.schemas.live_search import (
     LiveWorkspaceSection,
 )
 from app.schemas.source_ingestion import NormalizedSourceMetadata
+from app.services.live_search.pod_analysis import build_pod_analysis
 from app.services.source_ingestion.common import first_text
 from app.services.source_ingestion.pubmed import parse_pubmed_metadata
 
@@ -571,33 +572,41 @@ def resolve_pubmed_workspace(
             )
         )
 
+    record = search_result.model_copy(
+        update={
+            "authors": detail_metadata["authors"]
+            if isinstance(detail_metadata["authors"], list)
+            else search_result.authors,
+            "journal": detail_metadata["journal"]
+            if isinstance(detail_metadata["journal"], str)
+            else search_result.journal,
+            "summary": search_result.summary
+            or (
+                sections[0].content[0]
+                if sections and sections[0].content
+                else search_result.summary
+            ),
+            "keywords": detail_metadata["keywords"]
+            if isinstance(detail_metadata["keywords"], list)
+            else search_result.keywords,
+        }
+    )
+    extracted_signals = _build_pubmed_signals(
+        entity_type=entity_type,
+        detail_metadata=detail_metadata,
+        query=query,
+    )
+
     return LiveWorkspaceResponse(
         entity_type=entity_type,
         query=query,
-        record=search_result.model_copy(
-            update={
-                "authors": detail_metadata["authors"]
-                if isinstance(detail_metadata["authors"], list)
-                else search_result.authors,
-                "journal": detail_metadata["journal"]
-                if isinstance(detail_metadata["journal"], str)
-                else search_result.journal,
-                "summary": search_result.summary
-                or (
-                    sections[0].content[0]
-                    if sections and sections[0].content
-                    else search_result.summary
-                ),
-                "keywords": detail_metadata["keywords"]
-                if isinstance(detail_metadata["keywords"], list)
-                else search_result.keywords,
-            }
-        ),
+        record=record,
         sections=sections,
-        extracted_signals=_build_pubmed_signals(
-            entity_type=entity_type,
-            detail_metadata=detail_metadata,
-            query=query,
+        extracted_signals=extracted_signals,
+        pod_analysis=build_pod_analysis(
+            record=record,
+            sections=sections,
+            extracted_signals=extracted_signals,
         ),
         review_cue=LiveWorkspaceReviewCue(
             title="Literature-backed evidence review",

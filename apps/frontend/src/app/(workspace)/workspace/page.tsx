@@ -51,7 +51,13 @@ function describeLoadError(error: unknown): string {
 function isSupportedProvider(
   provider: string,
 ): provider is LiveSearchResultResponse["provider"] {
-  return provider === "openfda" || provider === "dailymed" || provider === "pubmed";
+  return (
+    provider === "openfda" ||
+    provider === "dailymed" ||
+    provider === "pubmed" ||
+    provider === "pubchem" ||
+    provider === "echa"
+  );
 }
 
 function buildBackToSearchHref(entityType: string, query: string | null): string {
@@ -335,6 +341,110 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
               </article>
             ))}
           </div>
+        </section>
+
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2>POD derivation and screening math</h2>
+              <p className="empty-copy">
+                RebaTox now separates raw extraction from a curation-grade POD pass by
+                selecting the strongest dose-bearing candidate and showing the screening
+                equations that can be derived from the current source.
+              </p>
+            </div>
+            <StatusBadge
+              tone={
+                workspace.pod_analysis.primary_candidate ? "success" : "warning"
+              }
+            >
+              {workspace.pod_analysis.primary_candidate
+                ? "Candidate selected"
+                : "No candidate selected"}
+            </StatusBadge>
+          </div>
+
+          {workspace.pod_analysis.primary_candidate ? (
+            <div className="study-card-stack">
+              <article className="study-card">
+                <div className="study-card-copy">
+                  <h3>Primary POD candidate</h3>
+                  <p>{workspace.pod_analysis.primary_candidate.sentence}</p>
+                </div>
+                <div className="descriptor-list">
+                  <div className="descriptor-row">
+                    <span className="overview-label">Dose</span>
+                    <strong>{workspace.pod_analysis.primary_candidate.dose_text}</strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">POD basis</span>
+                    <strong>
+                      {workspace.pod_analysis.primary_candidate.pod_term ??
+                        "Contextual dose cue"}
+                    </strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Species / model</span>
+                    <strong>
+                      {workspace.pod_analysis.primary_candidate.species ??
+                        "Not inferred"}
+                    </strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Route / duration</span>
+                    <strong>
+                      {workspace.pod_analysis.primary_candidate.route ??
+                        "Route not inferred"}
+                      {workspace.pod_analysis.primary_candidate.duration
+                        ? ` · ${workspace.pod_analysis.primary_candidate.duration}`
+                        : ""}
+                    </strong>
+                  </div>
+                </div>
+              </article>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div>
+                <h3>No dose-bearing POD candidate was found</h3>
+                <p className="empty-copy">
+                  The current source may still be useful for hazard, route, or
+                  identity review, but it did not expose enough structured dose text
+                  for a screening POD derivation.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {workspace.pod_analysis.derived_calculations.length > 0 ? (
+            <div className="pod-calculation-grid">
+              {workspace.pod_analysis.derived_calculations.map((item) => (
+                <article key={item.key} className="pod-calculation-card">
+                  <span className="overview-label">{item.label}</span>
+                  <strong>{item.result_text}</strong>
+                  <p className="pod-calculation-formula">{item.formula}</p>
+                  {item.assumptions.length > 0 ? (
+                    <ul className="pod-calculation-assumptions">
+                      {item.assumptions.map((assumption, index) => (
+                        <li key={`${item.key}-${index}`}>{assumption}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : null}
+
+          {workspace.pod_analysis.warnings.length > 0 ? (
+            <div className="pod-warning-stack">
+              {workspace.pod_analysis.warnings.map((warning, index) => (
+                <article key={`pod-warning-${index}`} className="pod-warning-card">
+                  <StatusBadge tone="warning">POD review note</StatusBadge>
+                  <p>{warning}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="card">

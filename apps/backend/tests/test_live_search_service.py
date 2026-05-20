@@ -101,9 +101,37 @@ def test_search_live_records_returns_mixed_source_results(monkeypatch) -> None:
             )
         ]
 
+    def fake_pubchem(*, entity_type: str, query: str, limit: int):
+        assert entity_type == "molecule"
+        assert query == "aspirin"
+        assert limit == 2
+        return [
+            _build_result(
+                entity_type="molecule",
+                provider="pubchem",
+                external_id="2244",
+                title="Aspirin",
+            )
+        ]
+
+    def fake_echa(*, entity_type: str, query: str, limit: int):
+        assert entity_type == "molecule"
+        assert query == "aspirin"
+        assert limit == 2
+        return [
+            _build_result(
+                entity_type="molecule",
+                provider="echa",
+                external_id="molecule:aspirin",
+                title="ECHA lookup: aspirin",
+            )
+        ]
+
     monkeypatch.setattr(service, "search_openfda_records", fake_openfda)
     monkeypatch.setattr(service, "search_dailymed_records", fake_dailymed)
+    monkeypatch.setattr(service, "search_pubchem_records", fake_pubchem)
     monkeypatch.setattr(service, "search_pubmed_records", fake_pubmed)
+    monkeypatch.setattr(service, "search_echa_records", fake_echa)
 
     response = service.search_live_records(
         entity_type="molecule",
@@ -112,13 +140,15 @@ def test_search_live_records_returns_mixed_source_results(monkeypatch) -> None:
     )
 
     assert response.entity_type == "molecule"
-    assert response.sources == ["openfda", "dailymed", "pubmed"]
-    assert response.total_results == 3
-    assert [item.provider for item in response.items] == [
+    assert response.sources == ["openfda", "dailymed", "pubchem", "pubmed", "echa"]
+    assert response.total_results == 5
+    assert {item.provider for item in response.items} == {
         "openfda",
         "dailymed",
+        "pubchem",
         "pubmed",
-    ]
+        "echa",
+    }
 
 
 def test_search_live_records_collapses_duplicate_molecule_labels(monkeypatch) -> None:
@@ -169,9 +199,17 @@ def test_search_live_records_collapses_duplicate_molecule_labels(monkeypatch) ->
     def fake_pubmed(*, entity_type: str, query: str, limit: int):
         return []
 
+    def fake_pubchem(*, entity_type: str, query: str, limit: int):
+        return []
+
+    def fake_echa(*, entity_type: str, query: str, limit: int):
+        return []
+
     monkeypatch.setattr(service, "search_openfda_records", fake_openfda)
     monkeypatch.setattr(service, "search_dailymed_records", fake_dailymed)
+    monkeypatch.setattr(service, "search_pubchem_records", fake_pubchem)
     monkeypatch.setattr(service, "search_pubmed_records", fake_pubmed)
+    monkeypatch.setattr(service, "search_echa_records", fake_echa)
 
     response = service.search_live_records(
         entity_type="molecule",
@@ -189,6 +227,7 @@ def test_search_live_records_returns_empty_response_when_no_source_hits(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(service, "search_pubmed_records", lambda **_: [])
+    monkeypatch.setattr(service, "search_echa_records", lambda **_: [])
 
     response = service.search_live_records(
         entity_type="degradant",
@@ -197,7 +236,7 @@ def test_search_live_records_returns_empty_response_when_no_source_hits(
     )
 
     assert response.entity_type == "degradant"
-    assert response.sources == ["pubmed"]
+    assert response.sources == ["pubmed", "echa"]
     assert response.total_results == 0
     assert response.items == []
 
@@ -216,12 +255,17 @@ def test_search_live_records_uses_cache(monkeypatch) -> None:
             )
         ]
 
+    def fake_echa(**_: object):
+        calls["count"] += 1
+        return []
+
     monkeypatch.setattr(service, "search_pubmed_records", fake_pubmed)
+    monkeypatch.setattr(service, "search_echa_records", fake_echa)
 
     first = service.search_live_records(entity_type="el", query="bisphenol a", limit=4)
     second = service.search_live_records(entity_type="el", query="bisphenol a", limit=4)
 
-    assert calls["count"] == 1
+    assert calls["count"] == 2
     assert first.items[0].external_id == second.items[0].external_id
 
 
@@ -278,4 +322,31 @@ def test_resolve_live_workspace_routes_to_dailymed(monkeypatch) -> None:
 
     assert workspace.entity_type == "molecule"
     assert workspace.record.provider == "dailymed"
-    assert workspace.record.title == "Aspirin 325 mg"
+
+
+def test_resolve_live_workspace_routes_to_pubchem(monkeypatch) -> None:
+    def fake_pubchem(*, entity_type: str, external_id: str, query: str | None):
+        assert entity_type == "molecule"
+        assert external_id == "2244"
+        assert query == "aspirin"
+        return _build_workspace(
+            entity_type="molecule",
+            provider="pubchem",
+            external_id="2244",
+            title="Aspirin",
+        )
+
+    monkeypatch.setattr(service, "resolve_pubchem_workspace", fake_pubchem)
+
+    workspace = service.resolve_live_workspace(
+        ResolveLiveWorkspaceRequest(
+            entity_type="molecule",
+            provider="pubchem",
+            external_id="2244",
+            query="aspirin",
+        )
+    )
+
+    assert workspace.entity_type == "molecule"
+    assert workspace.record.provider == "pubchem"
+    assert workspace.record.title == "Aspirin"

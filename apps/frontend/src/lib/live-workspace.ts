@@ -75,6 +75,8 @@ const PROVIDER_LABELS: Record<LiveSearchResultResponse["provider"], string> = {
   dailymed: "DailyMed",
   openfda: "openFDA",
   pubmed: "PubMed",
+  pubchem: "PubChem",
+  echa: "ECHA CHEM",
 };
 
 export function isSearchEntityType(value: string): value is SearchEntityType {
@@ -129,7 +131,10 @@ export function getPrimarySearchResult(
 
   if (entityType === "molecule") {
     const labelSourceMatch = items.find(
-      (item) => item.provider === "openfda" || item.provider === "dailymed",
+      (item) =>
+        item.provider === "openfda" ||
+        item.provider === "dailymed" ||
+        item.provider === "pubchem",
     );
     return labelSourceMatch ?? items[0];
   }
@@ -158,6 +163,26 @@ export function buildWorkspaceOverviewRows(
   workspace: LiveWorkspaceResponse,
 ): WorkspaceOverviewRow[] {
   const { record } = workspace;
+
+  if (record.provider === "pubchem") {
+    return [
+      { label: "Compound title", value: record.title },
+      { label: "Common names", value: joinOrDefault(record.brand_names) },
+      { label: "Identifiers", value: joinOrDefault(record.identifiers.map((item) => `${item.namespace}:${item.value}`)) },
+      { label: "Record type", value: record.document_type ?? "chemical_record" },
+      { label: "Published date", value: formatPublishedAt(record.published_at) },
+    ];
+  }
+
+  if (record.provider === "echa") {
+    return [
+      { label: "Lookup source", value: "ECHA CHEM" },
+      { label: "Search term", value: workspace.query ?? record.title },
+      { label: "Record type", value: record.document_type ?? "regulatory_lookup" },
+      { label: "Source mode", value: "Manual regulatory lookup" },
+      { label: "Published date", value: formatPublishedAt(record.published_at) },
+    ];
+  }
 
   if (workspace.entity_type === "molecule") {
     return [

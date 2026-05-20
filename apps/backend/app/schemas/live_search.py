@@ -60,6 +60,34 @@ class LiveWorkspaceReviewCue(BaseModel):
     description: str
 
 
+class LiveWorkspaceDoseCandidate(BaseModel):
+    dose_text: str
+    dose_value: float | None = None
+    unit: str | None = None
+    pod_term: str | None = None
+    species: str | None = None
+    route: str | None = None
+    duration: str | None = None
+    sentence: str
+    confidence: Literal["high", "medium", "low"] = "medium"
+
+
+class LiveWorkspaceDerivedCalculation(BaseModel):
+    key: str
+    label: str
+    formula: str
+    result_text: str
+    unit: str | None = None
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class LiveWorkspacePodAnalysis(BaseModel):
+    primary_candidate: LiveWorkspaceDoseCandidate | None = None
+    candidates: list[LiveWorkspaceDoseCandidate] = Field(default_factory=list)
+    derived_calculations: list[LiveWorkspaceDerivedCalculation] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ResolveLiveWorkspaceRequest(BaseModel):
     entity_type: EntityType
     provider: SourceProviderName
@@ -73,6 +101,7 @@ class LiveWorkspaceResponse(BaseModel):
     record: LiveSearchResult
     sections: list[LiveWorkspaceSection] = Field(default_factory=list)
     extracted_signals: list[LiveWorkspaceExtractedSignal] = Field(default_factory=list)
+    pod_analysis: LiveWorkspacePodAnalysis = Field(default_factory=LiveWorkspacePodAnalysis)
     review_cue: LiveWorkspaceReviewCue
     retrieval_mode: Literal["live"] = "live"
     retrieved_at: datetime
