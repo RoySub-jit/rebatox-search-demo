@@ -7,12 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.db.base import Base
 from app.db.session import get_engine, reset_database_state
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    get_engine()
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
     yield
     reset_database_state()
 
