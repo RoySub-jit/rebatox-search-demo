@@ -1,21 +1,27 @@
 import Link from "next/link";
 
+import { LiveSearchResults } from "@/components/live-search-results";
 import { PageIntro } from "@/components/page-intro";
+import { SearchModeSwitcher } from "@/components/search-mode-switcher";
 import { StatusBadge } from "@/components/status-badge";
 import {
   ApiClientError,
-  searchMolecules,
-  type MoleculeSearchResponse,
+  searchLiveRecords,
+  type LiveSearchResponse,
 } from "@/lib/api";
 import { appConfig } from "@/lib/config";
+import {
+  getSearchModeConfig,
+  isSearchEntityType,
+  type SearchModeConfig,
+} from "@/lib/live-workspace";
 
 type SearchPageProps = {
   searchParams?: Promise<{
+    entity_type?: string | string[];
     q?: string | string[];
   }>;
 };
-
-const EXAMPLE_QUERIES = ["aspirin", "ibuprofen", "adalimumab"];
 
 function getQueryValue(input: string | string[] | undefined): string {
   const value = Array.isArray(input) ? input[0] : input;
@@ -31,19 +37,29 @@ function describeLoadError(error: unknown): string {
     return error.message;
   }
 
-  return "Unable to load molecule search results.";
+  return "Unable to load live search results.";
+}
+
+function getModeConfig(rawMode: string): SearchModeConfig {
+  if (isSearchEntityType(rawMode)) {
+    return getSearchModeConfig(rawMode);
+  }
+
+  return getSearchModeConfig("molecule");
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
   const query = getQueryValue(resolvedSearchParams.q);
+  const rawEntityType = getQueryValue(resolvedSearchParams.entity_type) || "molecule";
+  const modeConfig = getModeConfig(rawEntityType);
 
   let loadError: string | null = null;
-  let response: MoleculeSearchResponse | null = null;
+  let response: LiveSearchResponse | null = null;
 
   if (query.length >= 2) {
     try {
-      response = await searchMolecules(appConfig.apiBaseUrl, query, 8);
+      response = await searchLiveRecords(appConfig.apiBaseUrl, modeConfig.value, query, 8);
     } catch (error) {
       loadError = describeLoadError(error);
     }
@@ -53,11 +69,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <div className="page-stack">
       <PageIntro
         eyebrow="Live source search"
-        title="Search a molecule"
-        description="Search live openFDA label metadata by brand, generic, or substance name, then open the result in a RebaTox review workspace."
+        title={modeConfig.title}
+        description={modeConfig.description}
         actions={
           <>
-            <StatusBadge tone="info">openFDA live</StatusBadge>
+            <StatusBadge tone="info">Live retrieval</StatusBadge>
             <StatusBadge tone="neutral">Prototype</StatusBadge>
           </>
         }
@@ -66,24 +82,38 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       <section className="card search-panel">
         <div className="card-heading">
           <div>
-            <h2>Find a molecule of interest</h2>
+            <h2>Choose a search mode</h2>
             <p className="empty-copy">
-              Enter a brand name, generic name, or active substance to search the
-              live label source.
+              RebaTox now supports query-time search for molecules, degradants, and
+              E&amp;L topics without bulk source ingestion.
+            </p>
+          </div>
+          <StatusBadge tone="neutral">{modeConfig.label}</StatusBadge>
+        </div>
+
+        <SearchModeSwitcher currentMode={modeConfig.value} currentQuery={query} />
+
+        <div className="card-heading search-panel-subhead">
+          <div>
+            <h2>Find an entity of interest</h2>
+            <p className="empty-copy">
+              Search live public sources, then open a transient workspace grounded in
+              the selected source record.
             </p>
           </div>
           <StatusBadge tone="neutral">Query-based</StatusBadge>
         </div>
 
         <form action="/search" method="GET" className="search-form">
+          <input type="hidden" name="entity_type" value={modeConfig.value} />
           <div className="search-form-row">
             <input
               className="input-control search-input"
               type="search"
               name="q"
               defaultValue={query}
-              placeholder="Search aspirin, adalimumab, ibuprofen..."
-              aria-label="Search molecule"
+              placeholder={modeConfig.queryPlaceholder}
+              aria-label={`Search ${modeConfig.label.toLowerCase()}`}
             />
             <button className="button-primary" type="submit">
               Search
@@ -92,10 +122,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </form>
 
         <div className="button-row">
-          {EXAMPLE_QUERIES.map((example) => (
+          {modeConfig.examples.map((example) => (
             <Link
               key={example}
-              href={`/search?q=${encodeURIComponent(example)}`}
+              href={`/search?entity_type=${modeConfig.value}&q=${encodeURIComponent(example)}`}
               className="button-secondary search-example-link"
             >
               Try {example}
@@ -107,11 +137,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       {query.length === 0 ? (
         <section className="card empty-state">
           <div>
-            <h2>Start with a molecule name</h2>
-            <p className="empty-copy">
-              This searchable prototype is the quickest path for stewardship
-              reviewers to open RebaTox and inspect a real label-backed molecule.
-            </p>
+            <h2>{modeConfig.emptyStateTitle}</h2>
+            <p className="empty-copy">{modeConfig.emptyStateDescription}</p>
           </div>
         </section>
       ) : null}
@@ -124,7 +151,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </div>
             <StatusBadge tone="danger">Input error</StatusBadge>
           </div>
-          <p>Use at least 2 characters for a live molecule lookup.</p>
+          <p>Use at least 2 characters for a live search.</p>
         </section>
       ) : null}
 
@@ -138,7 +165,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
           <p>{loadError}</p>
           <p>
-            Confirm the backend is running and can reach the external label source
+            Confirm the backend is running and can reach the configured public source
             before retrying this lookup.
           </p>
         </section>
@@ -159,79 +186,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </StatusBadge>
           </div>
 
-          {response.items.length === 0 ? (
-            <div className="empty-state">
-              <div>
-                <h3>No live matches found</h3>
-                <p className="empty-copy">
-                  Try a broader generic name, substance name, or a different brand
-                  spelling.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="results-stack">
-              {response.items.map((item) => (
-                <article key={`${item.provider}-${item.external_id}`} className="task-item">
-                  <div className="task-item-top">
-                    <div>
-                      <h3>{item.title}</h3>
-                      <p>
-                        {item.summary ??
-                          "No summary snippet was available in the current source payload."}
-                      </p>
-                    </div>
-                    <div className="badge-row">
-                      <StatusBadge tone="info">{item.provider}</StatusBadge>
-                      {item.product_type ? (
-                        <StatusBadge tone="neutral">{item.product_type}</StatusBadge>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="search-result-meta">
-                    <div className="overview-block">
-                      <span className="overview-label">Generic</span>
-                      <strong>{item.generic_name ?? "Not reported"}</strong>
-                    </div>
-                    <div className="overview-block">
-                      <span className="overview-label">Brands</span>
-                      <strong>{item.brand_names.join(", ") || "Not reported"}</strong>
-                    </div>
-                    <div className="overview-block">
-                      <span className="overview-label">Manufacturer</span>
-                      <strong>
-                        {item.manufacturer_names.join(", ") || "Not reported"}
-                      </strong>
-                    </div>
-                    <div className="overview-block">
-                      <span className="overview-label">Routes</span>
-                      <strong>{item.routes.join(", ") || "Not reported"}</strong>
-                    </div>
-                  </div>
-
-                  <div className="button-row">
-                    <Link
-                      className="button-primary"
-                      href={`/molecule?provider=${item.provider}&id=${encodeURIComponent(item.external_id)}&q=${encodeURIComponent(response.query)}`}
-                    >
-                      Open in RebaTox
-                    </Link>
-                    {item.source_uri ? (
-                      <a
-                        className="button-secondary search-example-link"
-                        href={item.source_uri}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open source
-                      </a>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+          <LiveSearchResults response={response} />
         </section>
       ) : null}
     </div>

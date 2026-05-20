@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --test src/lib/report-review.test.cjs"
+    "test": "node --experimental-strip-types --test src/lib/*.test.cjs"
   },
   "dependencies": {
     "next": "15.5.9",

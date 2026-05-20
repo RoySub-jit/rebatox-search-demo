@@ -28,7 +28,8 @@ export function WorkspaceNav() {
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href === "/search" && pathname === "/molecule");
+            (item.href === "/search" &&
+              (pathname === "/molecule" || pathname === "/workspace"));
 
           return (
             <Link

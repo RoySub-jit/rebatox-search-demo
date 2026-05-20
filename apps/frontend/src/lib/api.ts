@@ -84,6 +84,61 @@ export type SupportCategory =
   | "analog_supported_provisional_pod"
   | "insufficient_public_data_for_pod";
 
+export type SearchEntityType = "molecule" | "degradant" | "el";
+
+export type LiveSearchResultResponse = {
+  entity_type: SearchEntityType;
+  provider: "dailymed" | "openfda" | "pubmed";
+  external_id: string;
+  title: string;
+  subtitle: string | null;
+  summary: string | null;
+  document_type: string | null;
+  published_at: string | null;
+  source_uri: string | null;
+  identifiers: {
+    namespace: string;
+    value: string;
+  }[];
+  generic_name: string | null;
+  brand_names: string[];
+  manufacturer_names: string[];
+  routes: string[];
+  substance_names: string[];
+  product_type: string | null;
+  authors: string[];
+  journal: string | null;
+  keywords: string[];
+};
+
+export type LiveSearchResponse = {
+  entity_type: SearchEntityType;
+  query: string;
+  sources: ("dailymed" | "openfda" | "pubmed")[];
+  limit: number;
+  total_results: number;
+  items: LiveSearchResultResponse[];
+};
+
+export type LiveWorkspaceSectionResponse = {
+  key: string;
+  title: string;
+  content: string[];
+};
+
+export type LiveWorkspaceResponse = {
+  entity_type: SearchEntityType;
+  query: string | null;
+  record: LiveSearchResultResponse;
+  sections: LiveWorkspaceSectionResponse[];
+  review_cue: {
+    title: string;
+    description: string;
+  };
+  retrieval_mode: "live";
+  retrieved_at: string;
+};
+
 export type MoleculeSearchResultResponse = {
   provider: "dailymed" | "openfda" | "pubmed";
   external_id: string;
@@ -424,4 +479,45 @@ export function getMoleculeDetail(
       method: "GET",
     },
   );
+}
+
+export function searchLiveRecords(
+  apiBaseUrl: string,
+  entityType: SearchEntityType,
+  query: string,
+  limit = 10,
+  sources?: string[],
+) {
+  const params = new URLSearchParams({
+    entity_type: entityType,
+    q: query,
+    limit: String(limit),
+  });
+
+  if (sources && sources.length > 0) {
+    params.set("sources", sources.join(","));
+  }
+
+  return requestJson<LiveSearchResponse>(
+    apiBaseUrl,
+    `/api/v1/search?${params.toString()}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function resolveLiveWorkspace(
+  apiBaseUrl: string,
+  payload: {
+    entity_type: SearchEntityType;
+    provider: LiveSearchResultResponse["provider"];
+    external_id: string;
+    query?: string | null;
+  },
+) {
+  return requestJson<LiveWorkspaceResponse>(apiBaseUrl, "/api/v1/workspaces/resolve", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

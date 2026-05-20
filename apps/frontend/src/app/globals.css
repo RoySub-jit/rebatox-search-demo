@@ -820,6 +820,50 @@ pre {
   gap: 14px;
 }
 
+.search-panel-subhead {
+  margin-top: 6px;
+}
+
+.search-mode-switcher {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.search-mode-chip {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.search-mode-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 84, 61, 0.26);
+  box-shadow: 0 14px 28px rgba(31, 52, 40, 0.08);
+}
+
+.search-mode-chip.active {
+  border-color: rgba(34, 84, 61, 0.4);
+  background: rgba(236, 245, 239, 0.96);
+}
+
+.search-mode-chip-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.search-mode-chip-copy {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
 .search-form-row {
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -841,6 +885,11 @@ pre {
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 16px 0 18px;
+}
+
+.results-group {
+  display: grid;
+  gap: 16px;
 }
 
 .descriptor-row {
@@ -1098,6 +1147,10 @@ pre {
   }
 
   .search-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .search-mode-switcher {
     grid-template-columns: 1fr;
   }
 
