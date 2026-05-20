@@ -9,7 +9,9 @@ import { workspaceNavItems } from "@/lib/navigation";
 export function WorkspaceNav() {
   const pathname = usePathname();
   const navItems = appConfig.publicDemoMode
-    ? workspaceNavItems.filter((item) => item.href === "/search")
+    ? workspaceNavItems.filter(
+        (item) => item.href === "/search" || item.href === "/saved-workspaces",
+      )
     : workspaceNavItems;
 
   return (

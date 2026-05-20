@@ -82,6 +82,9 @@ export function WorkspaceSavePanel({
             >
               Open saved workspace
             </Link>
+            <Link className="button-secondary" href="/saved-workspaces">
+              View saved workspaces
+            </Link>
           </div>
         </div>
       ) : (

@@ -1,82 +1,111 @@
 from __future__ import annotations
 
 
-def _workspace_payload() -> dict[str, object]:
+def _build_saved_workspace_payload(
+    *,
+    title: str = "Aspirin workspace",
+    external_id: str = "set-123",
+    query: str | None = "aspirin",
+) -> dict:
     return {
+        "label": title,
+        "notes": "Saved for stewardship review.",
         "workspace": {
             "entity_type": "molecule",
-            "query": "aspirin",
+            "query": query,
             "record": {
                 "entity_type": "molecule",
-                "provider": "dailymed",
-                "external_id": "dm-set-1",
-                "title": "Aspirin 325 mg",
-                "subtitle": "drug_label",
-                "summary": "Used to reduce fever and relieve minor aches.",
-                "document_type": "drug_label",
+                "provider": "openfda",
+                "external_id": external_id,
+                "title": title,
+                "subtitle": None,
+                "summary": "Label-backed molecule workspace for review.",
+                "document_type": "HUMAN OTC DRUG",
                 "published_at": "2026-05-08",
-                "source_uri": "https://example.test/dailymed/dm-set-1",
+                "source_uri": None,
                 "identifiers": [
-                    {"namespace": "setid", "value": "dm-set-1"},
+                    {"namespace": "set_id", "value": external_id},
                 ],
                 "generic_name": "aspirin",
                 "brand_names": ["Aspirin"],
                 "manufacturer_names": ["Example Labs"],
                 "routes": ["ORAL"],
-                "substance_names": ["aspirin"],
-                "product_type": "drug_label",
+                "substance_names": ["ASPIRIN"],
+                "product_type": "HUMAN OTC DRUG",
                 "authors": [],
                 "journal": None,
                 "keywords": [],
             },
             "sections": [
                 {
-                    "key": "uses",
-                    "title": "Uses",
-                    "content": ["Used to reduce fever and relieve minor aches."],
+                    "key": "warnings",
+                    "title": "Warnings",
+                    "content": ["Use as directed."],
                 }
             ],
             "extracted_signals": [
                 {
-                    "key": "route",
+                    "key": "route_signal",
                     "label": "Route",
                     "value": "ORAL",
-                    "source_section_key": None,
-                    "confidence": "high",
+                    "source_section_key": "warnings",
+                    "confidence": "medium",
                 }
             ],
             "review_cue": {
-                "title": "DailyMed label review",
-                "description": "Review this label before moving into broader assessment.",
+                "title": "Live review",
+                "description": "Use this record to review the source evidence.",
             },
             "retrieval_mode": "live",
             "retrieved_at": "2026-05-08T00:00:00Z",
-        }
+        },
     }
 
 
-def test_save_workspace_roundtrip(client) -> None:
-    create_response = client.post(
+def test_save_workspace_route_persists_snapshot_and_returns_payload(client) -> None:
+    response = client.post(
         "/api/v1/workspaces/save",
-        json=_workspace_payload(),
+        json=_build_saved_workspace_payload(),
     )
 
-    assert create_response.status_code == 201
-    created = create_response.json()
-    assert created["label"] == "Aspirin 325 mg"
-    assert created["workspace"]["record"]["provider"] == "dailymed"
-    assert created["workspace"]["extracted_signals"][0]["key"] == "route"
-
-    fetch_response = client.get(f"/api/v1/workspaces/{created['id']}")
-
-    assert fetch_response.status_code == 200
-    fetched = fetch_response.json()
-    assert fetched["id"] == created["id"]
-    assert fetched["workspace"]["query"] == "aspirin"
-    assert fetched["workspace"]["sections"][0]["key"] == "uses"
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["id"] == 1
+    assert payload["label"] == "Aspirin workspace"
+    assert payload["workspace"]["record"]["external_id"] == "set-123"
 
 
-def test_get_saved_workspace_returns_not_found(client) -> None:
+def test_list_saved_workspaces_route_returns_recent_summaries(client) -> None:
+    client.post(
+        "/api/v1/workspaces/save",
+        json=_build_saved_workspace_payload(
+            title="Aspirin workspace",
+            external_id="set-123",
+            query="aspirin",
+        ),
+    )
+    client.post(
+        "/api/v1/workspaces/save",
+        json=_build_saved_workspace_payload(
+            title="Ibuprofen workspace",
+            external_id="set-456",
+            query="ibuprofen",
+        ),
+    )
+
+    response = client.get("/api/v1/workspaces", params={"limit": 10})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_results"] == 2
+    assert payload["items"][0]["label"] == "Ibuprofen workspace"
+    assert payload["items"][0]["record_title"] == "Ibuprofen workspace"
+    assert payload["items"][0]["extracted_signal_count"] == 1
+    assert payload["items"][0]["section_count"] == 1
+    assert payload["items"][1]["label"] == "Aspirin workspace"
+
+
+def test_get_saved_workspace_route_returns_not_found(client) -> None:
     response = client.get("/api/v1/workspaces/999")
 
     assert response.status_code == 404

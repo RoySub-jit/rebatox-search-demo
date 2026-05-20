@@ -10,10 +10,15 @@ from app.schemas.live_search import (
     LiveWorkspaceResponse,
     ResolveLiveWorkspaceRequest,
     SaveLiveWorkspaceRequest,
+    SavedWorkspaceListResponse,
     SavedWorkspaceResponse,
 )
 from app.services.live_search.service import resolve_live_workspace
-from app.services.saved_workspaces import get_saved_workspace, save_workspace_snapshot
+from app.services.saved_workspaces import (
+    get_saved_workspace,
+    list_saved_workspaces,
+    save_workspace_snapshot,
+)
 
 router = APIRouter(prefix="/workspaces", tags=["live-workspaces"])
 
@@ -72,6 +77,17 @@ def save_live_workspace_route(
             code="saved_workspace_invalid_request",
             message=str(exc),
         )
+
+
+@router.get(
+    "",
+    response_model=SavedWorkspaceListResponse,
+)
+def list_saved_workspaces_route(
+    limit: int = 24,
+    db: Session = Depends(get_db),
+) -> SavedWorkspaceListResponse:
+    return list_saved_workspaces(db=db, limit=limit)
 
 
 @router.get(

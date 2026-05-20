@@ -94,3 +94,23 @@ class SavedWorkspaceResponse(BaseModel):
     query: str | None = None
     saved_at: datetime
     workspace: LiveWorkspaceResponse
+
+
+class SavedWorkspaceListItem(BaseModel):
+    id: int
+    label: str
+    notes: str | None = None
+    entity_type: EntityType
+    provider: SourceProviderName
+    external_id: str
+    query: str | None = None
+    saved_at: datetime
+    record_title: str
+    record_summary: str | None = None
+    extracted_signal_count: int = 0
+    section_count: int = 0
+
+
+class SavedWorkspaceListResponse(BaseModel):
+    total_results: int
+    items: list[SavedWorkspaceListItem] = Field(default_factory=list)

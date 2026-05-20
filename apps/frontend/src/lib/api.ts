@@ -160,6 +160,26 @@ export type SavedWorkspaceResponse = {
   workspace: LiveWorkspaceResponse;
 };
 
+export type SavedWorkspaceListItemResponse = {
+  id: number;
+  label: string;
+  notes: string | null;
+  entity_type: SearchEntityType;
+  provider: LiveSearchResultResponse["provider"];
+  external_id: string;
+  query: string | null;
+  saved_at: string;
+  record_title: string;
+  record_summary: string | null;
+  extracted_signal_count: number;
+  section_count: number;
+};
+
+export type SavedWorkspaceListResponse = {
+  total_results: number;
+  items: SavedWorkspaceListItemResponse[];
+};
+
 export type MoleculeSearchResultResponse = {
   provider: "dailymed" | "openfda" | "pubmed";
   external_id: string;
@@ -561,6 +581,20 @@ export function getSavedWorkspace(apiBaseUrl: string, workspaceId: number) {
   return requestJson<SavedWorkspaceResponse>(
     apiBaseUrl,
     `/api/v1/workspaces/${workspaceId}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function listSavedWorkspaces(apiBaseUrl: string, limit = 24) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+  });
+
+  return requestJson<SavedWorkspaceListResponse>(
+    apiBaseUrl,
+    `/api/v1/workspaces?${params.toString()}`,
     {
       method: "GET",
     },

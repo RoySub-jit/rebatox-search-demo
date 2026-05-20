@@ -1032,6 +1032,45 @@ pre {
   background: linear-gradient(180deg, rgba(247, 250, 252, 0.72), rgba(255, 255, 255, 0.86));
 }
 
+.saved-workspace-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.saved-workspace-card {
+  padding: 24px;
+  border-radius: 26px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 248, 252, 0.88));
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 18px;
+}
+
+.saved-workspace-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.saved-workspace-top h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: -0.03em;
+}
+
+.saved-workspace-subtitle,
+.saved-workspace-summary {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.saved-workspace-subtitle {
+  margin-top: 8px;
+}
+
 .descriptor-row {
   display: flex;
   align-items: flex-start;
@@ -1284,6 +1323,7 @@ pre {
 @media (max-width: 920px) {
   .page-intro,
   .workspace-command-bar,
+  .saved-workspace-top,
   .card-heading,
   .highlight-title-row,
   .task-item-top,
