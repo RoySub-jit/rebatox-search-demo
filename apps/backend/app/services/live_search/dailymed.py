@@ -62,7 +62,9 @@ def _fetch_xml(setid: str) -> ElementTree.Element:
     request = Request(
         DAILYMED_SPL_XML_ENDPOINT.format(setid=setid),
         headers={
-            "Accept": "application/xml",
+            # DailyMed's SPL XML endpoint returns 406 for strict XML Accept headers.
+            # Use a generic accept header so both local and hosted lookups succeed.
+            "Accept": "*/*",
             "User-Agent": "RebaTox/0.1",
         },
     )
