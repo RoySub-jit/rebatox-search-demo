@@ -62,8 +62,8 @@ export function WorkspaceNav() {
           </div>
           <div className="sidebar-note">
             <div className="sidebar-note-label">Contact</div>
-            <a className="nav-copy" href="mailto:suhajr@uci.edu">
-              suhajr@uci.edu
+            <a className="nav-copy" href="mailto:subhajr@uci.edu">
+              subhajr@uci.edu
             </a>
           </div>
           <div className="sidebar-note">
