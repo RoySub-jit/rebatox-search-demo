@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 import { LiveSearchResults } from "@/components/live-search-results";
 import { PageIntro } from "@/components/page-intro";
@@ -134,6 +135,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         );
       }
     } catch (error) {
+      if (isRedirectError(error)) {
+        throw error;
+      }
       loadError = describeLoadError(error);
     }
   }

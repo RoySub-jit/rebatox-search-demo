@@ -92,8 +92,14 @@ export function LiveSearchResults({ response }: LiveSearchResultsProps) {
                   </div>
                 </div>
 
-                {item.source_uri && item.provider !== "openfda" ? (
-                  <div className="button-row">
+                <div className="button-row">
+                  <a
+                    className="button-primary"
+                    href={`/workspace?entity_type=${item.entity_type}&provider=${item.provider}&id=${encodeURIComponent(item.external_id)}&q=${encodeURIComponent(response.query)}`}
+                  >
+                    Open in RebaTox
+                  </a>
+                  {item.source_uri && item.provider !== "openfda" ? (
                     <a
                       className="button-secondary search-example-link"
                       href={item.source_uri}
@@ -102,8 +108,8 @@ export function LiveSearchResults({ response }: LiveSearchResultsProps) {
                     >
                       Open source
                     </a>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </article>
             ))}
           </div>
