@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildWorkspaceOverviewRows,
   formatPublishedAt,
+  getPrimarySearchResult,
   getProviderLabel,
   getSearchModeConfig,
   groupSearchResultsByProvider,
@@ -71,6 +72,56 @@ test("live-workspace helpers group mixed-source results", () => {
   assert.equal(grouped[0].label, "openFDA");
   assert.equal(grouped[1].label, "PubMed");
   assert.equal(getProviderLabel("openfda"), "openFDA");
+});
+
+test("live-workspace helpers choose a primary match for direct opening", () => {
+  const items = [
+    {
+      entity_type: "molecule",
+      provider: "pubmed",
+      external_id: "12345",
+      title: "Aspirin Review",
+      subtitle: "Journal of Safety",
+      summary: "Journal of Safety | Lead author: Doe J",
+      document_type: "journal_article",
+      published_at: "2025-06-01",
+      source_uri: "https://pubmed.ncbi.nlm.nih.gov/12345/",
+      identifiers: [],
+      generic_name: null,
+      brand_names: [],
+      manufacturer_names: [],
+      routes: [],
+      substance_names: [],
+      product_type: null,
+      authors: ["Doe J"],
+      journal: "Journal of Safety",
+      keywords: [],
+    },
+    {
+      entity_type: "molecule",
+      provider: "openfda",
+      external_id: "set-1",
+      title: "Aspirin Label",
+      subtitle: "HUMAN OTC DRUG",
+      summary: null,
+      document_type: "label_record",
+      published_at: "2026-04-24",
+      source_uri: "https://example.test/openfda/set-1",
+      identifiers: [],
+      generic_name: "aspirin",
+      brand_names: ["Aspirin"],
+      manufacturer_names: [],
+      routes: ["ORAL"],
+      substance_names: ["ASPIRIN"],
+      product_type: "HUMAN OTC DRUG",
+      authors: [],
+      journal: null,
+      keywords: [],
+    },
+  ];
+
+  assert.equal(getPrimarySearchResult("molecule", items)?.provider, "openfda");
+  assert.equal(getPrimarySearchResult("degradant", items)?.provider, "pubmed");
 });
 
 test("live-workspace helpers build overview rows for molecule and literature modes", () => {

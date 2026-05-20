@@ -113,6 +113,24 @@ export function groupSearchResultsByProvider(
   return Array.from(groups.values());
 }
 
+export function getPrimarySearchResult(
+  entityType: SearchEntityType,
+  items: LiveSearchResultResponse[],
+): LiveSearchResultResponse | null {
+  if (items.length === 0) {
+    return null;
+  }
+
+  if (entityType === "molecule") {
+    const labelSourceMatch = items.find(
+      (item) => item.provider === "openfda" || item.provider === "dailymed",
+    );
+    return labelSourceMatch ?? items[0];
+  }
+
+  return items[0];
+}
+
 export function formatPublishedAt(value: string | null): string {
   if (!value) {
     return "Not reported";

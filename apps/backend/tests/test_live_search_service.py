@@ -121,6 +121,70 @@ def test_search_live_records_returns_mixed_source_results(monkeypatch) -> None:
     ]
 
 
+def test_search_live_records_collapses_duplicate_molecule_labels(monkeypatch) -> None:
+    def fake_openfda(*, entity_type: str, query: str, limit: int):
+        return [
+            LiveSearchResult(
+                entity_type="molecule",
+                provider="openfda",
+                external_id="set-1",
+                title="Aspirin",
+                generic_name="ASPIRIN",
+                brand_names=["Aspirin"],
+                identifiers=[SourceRecordIdentifier(namespace="openfda", value="set-1")],
+            ),
+            LiveSearchResult(
+                entity_type="molecule",
+                provider="openfda",
+                external_id="set-2",
+                title="Aspirin",
+                generic_name="ASPIRIN",
+                brand_names=["Aspirin"],
+                identifiers=[SourceRecordIdentifier(namespace="openfda", value="set-2")],
+            ),
+        ]
+
+    def fake_dailymed(*, entity_type: str, query: str, limit: int):
+        return [
+            LiveSearchResult(
+                entity_type="molecule",
+                provider="dailymed",
+                external_id="dm-1",
+                title="Aspirin",
+                generic_name="Aspirin",
+                brand_names=["Aspirin"],
+                identifiers=[SourceRecordIdentifier(namespace="setid", value="dm-1")],
+            ),
+            LiveSearchResult(
+                entity_type="molecule",
+                provider="dailymed",
+                external_id="dm-2",
+                title="Aspirin",
+                generic_name="Aspirin",
+                brand_names=["Aspirin"],
+                identifiers=[SourceRecordIdentifier(namespace="setid", value="dm-2")],
+            ),
+        ]
+
+    def fake_pubmed(*, entity_type: str, query: str, limit: int):
+        return []
+
+    monkeypatch.setattr(service, "search_openfda_records", fake_openfda)
+    monkeypatch.setattr(service, "search_dailymed_records", fake_dailymed)
+    monkeypatch.setattr(service, "search_pubmed_records", fake_pubmed)
+
+    response = service.search_live_records(
+        entity_type="molecule",
+        query="aspirin",
+        limit=8,
+    )
+
+    assert [(item.provider, item.external_id) for item in response.items] == [
+        ("openfda", "set-1"),
+        ("dailymed", "dm-1"),
+    ]
+
+
 def test_search_live_records_returns_empty_response_when_no_source_hits(
     monkeypatch,
 ) -> None:

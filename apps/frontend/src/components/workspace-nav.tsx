@@ -53,13 +53,27 @@ export function WorkspaceNav() {
       </div>
 
       {appConfig.publicDemoMode ? (
-        <div className="sidebar-note">
-          <div className="sidebar-note-label">Mode</div>
-          <div className="nav-copy">
-            Public search demo with live source lookup. Internal report workflow is
-            intentionally hidden in this hosted view.
+        <>
+          <div className="sidebar-note">
+            <div className="sidebar-note-label">Developer</div>
+            <div className="nav-copy">
+              Developed by Subhajit Roy, a final-year Toxicology PhD candidate at UC Irvine.
+            </div>
           </div>
-        </div>
+          <div className="sidebar-note">
+            <div className="sidebar-note-label">Contact</div>
+            <a className="nav-copy" href="mailto:suhajr@uci.edu">
+              suhajr@uci.edu
+            </a>
+          </div>
+          <div className="sidebar-note">
+            <div className="sidebar-note-label">Mode</div>
+            <div className="nav-copy">
+              Public search demo with live source lookup. Internal report workflow is
+              intentionally hidden in this hosted view.
+            </div>
+          </div>
+        </>
       ) : null}
     </aside>
   );

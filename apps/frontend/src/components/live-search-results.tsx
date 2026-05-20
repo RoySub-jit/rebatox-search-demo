@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { LiveSearchResponse } from "@/lib/api";
 import {
   formatPublishedAt,
+  getPrimarySearchResult,
   getProviderLabel,
   groupSearchResultsByProvider,
 } from "@/lib/live-workspace";
@@ -24,6 +25,7 @@ function buildWorkspaceHref(
 
 export function LiveSearchResults({ response }: LiveSearchResultsProps) {
   const groups = groupSearchResultsByProvider(response.items);
+  const primaryResult = getPrimarySearchResult(response.entity_type, response.items);
 
   if (response.items.length === 0) {
     return (
@@ -41,6 +43,56 @@ export function LiveSearchResults({ response }: LiveSearchResultsProps) {
 
   return (
     <div className="results-stack">
+      {primaryResult ? (
+        <section className="card results-highlight">
+          <div className="card-heading">
+            <div>
+              <h3>Best match</h3>
+              <p className="empty-copy">
+                RebaTox picked the clearest current source record so you can open one
+                strong workspace path immediately.
+              </p>
+            </div>
+            <StatusBadge tone="success">{getProviderLabel(primaryResult.provider)}</StatusBadge>
+          </div>
+          <div className="task-item">
+            <div className="task-item-top">
+              <div>
+                <h4>{primaryResult.title}</h4>
+                <p>
+                  {primaryResult.summary ??
+                    primaryResult.subtitle ??
+                    "No summary snippet was available in the current source payload."}
+                </p>
+              </div>
+            </div>
+            <div className="button-row">
+              <Link
+                className="button-primary"
+                href={buildWorkspaceHref(
+                  response.entity_type,
+                  primaryResult.provider,
+                  primaryResult.external_id,
+                  response.query,
+                )}
+              >
+                Open best match in RebaTox
+              </Link>
+              {primaryResult.source_uri ? (
+                <a
+                  className="button-secondary search-example-link"
+                  href={primaryResult.source_uri}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open source
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {groups.map((group) => (
         <section key={group.provider} className="results-group">
           <div className="card-heading">
