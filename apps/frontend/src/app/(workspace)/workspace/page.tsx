@@ -133,6 +133,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     const modeConfig = getSearchModeConfig(entityType as LiveWorkspaceResponse["entity_type"]);
     const overviewRows = buildWorkspaceOverviewRows(workspace);
     const backToSearchHref = buildBackToSearchHref(entityType, activeQuery);
+    const workspaceStateLabel = savedWorkspace ? "Saved reviewer snapshot" : "Live source workspace";
 
     return (
       <div className="page-stack">
@@ -164,22 +165,62 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
           }
         />
 
-        <section className="card">
-          <div className="button-row">
-            <Link className="button-secondary search-example-link" href={backToSearchHref}>
-              Back to search
-            </Link>
-            {workspace.record.source_uri && workspace.record.provider !== "openfda" ? (
-              <a
-                className="button-primary"
-                href={workspace.record.source_uri}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open source record
-              </a>
-            ) : null}
+        <section className="card workspace-command-bar">
+          <div className="workspace-command-copy">
+            <span className="section-kicker">Workspace controls</span>
+            <h2>Open, save, and trace the current evidence record</h2>
+            <p className="empty-copy">
+              This workspace keeps the live source view structured for stewardship review
+              while preserving an easy path back to alternative matches or the original
+              source.
+            </p>
           </div>
+          <div className="workspace-command-actions">
+            <div className="button-row">
+              <Link className="button-secondary search-example-link" href={backToSearchHref}>
+                Back to search
+              </Link>
+              {workspace.record.source_uri && workspace.record.provider !== "openfda" ? (
+                <a
+                  className="button-primary"
+                  href={workspace.record.source_uri}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open source record
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
+        <section className="workspace-spotlight-grid">
+          <article className="overview-block spotlight-block">
+            <span className="overview-label">Workspace state</span>
+            <strong>{workspaceStateLabel}</strong>
+            <p className="spotlight-copy">
+              {savedWorkspace
+                ? "Persisted for later reopening with the same reviewed source context."
+                : "Resolved directly from the strongest current live public-source match."}
+            </p>
+          </article>
+          <article className="overview-block spotlight-block">
+            <span className="overview-label">Source family</span>
+            <strong>{getProviderLabel(workspace.record.provider)}</strong>
+            <p className="spotlight-copy">
+              {workspace.record.document_type ??
+                workspace.record.product_type ??
+                "Structured source record"}
+            </p>
+          </article>
+          <article className="overview-block spotlight-block">
+            <span className="overview-label">Search origin</span>
+            <strong>{activeQuery ?? "Direct record open"}</strong>
+            <p className="spotlight-copy">
+              Retrieved {formatPublishedAt(workspace.retrieved_at)} for the current
+              RebaTox review pass.
+            </p>
+          </article>
         </section>
 
         <section className="card">

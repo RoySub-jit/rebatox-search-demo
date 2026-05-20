@@ -51,12 +51,73 @@ function getModeConfig(rawMode: string): SearchModeConfig {
   return getSearchModeConfig("molecule");
 }
 
+function getModeHighlights(mode: SearchModeConfig) {
+  if (mode.value === "molecule") {
+    return [
+      {
+        label: "Live sources",
+        value: "openFDA, DailyMed, PubMed",
+        copy: "Blend label-backed records and literature so a reviewer can start with the strongest current public evidence.",
+      },
+      {
+        label: "Workspace output",
+        value: "One review-ready record",
+        copy: "RebaTox resolves the strongest current match into a structured workspace instead of leaving reviewers in raw source text.",
+      },
+      {
+        label: "Reviewer objective",
+        value: "Fast triage to formal review",
+        copy: "Use the workspace to scan route, manufacturer, dose language, warnings, and extracted safety cues before saving a snapshot.",
+      },
+    ];
+  }
+
+  if (mode.value === "degradant") {
+    return [
+      {
+        label: "Live sources",
+        value: "PubMed-first literature retrieval",
+        copy: "Search degradant-relevant abstracts and normalize them into a transient review workspace with source provenance intact.",
+      },
+      {
+        label: "Workspace output",
+        value: "Evidence cues and POD language",
+        copy: "Dose, exposure, and point-of-departure language are surfaced first so the tox reviewer can decide whether the hit is worth deeper follow-up.",
+      },
+      {
+        label: "Reviewer objective",
+        value: "Rapid degradant signal scan",
+        copy: "Support early impurity review without waiting for a batch-ingestion job or manual literature notes.",
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Live sources",
+      value: "PubMed-driven topic retrieval",
+      copy: "Search public literature for extractables and leachables topics with a structured review shell instead of ad hoc browsing.",
+    },
+    {
+      label: "Workspace output",
+      value: "Source-grounded E&L workspace",
+      copy: "Normalize source details, extracted signals, and provenance so the same topic can be reopened or shared with reviewers.",
+    },
+    {
+      label: "Reviewer objective",
+      value: "Early packaging risk framing",
+      copy: "Use query-time evidence retrieval to assess whether an E&L topic merits a saved workspace and fuller toxicology review.",
+    },
+  ];
+}
+
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
   const query = getQueryValue(resolvedSearchParams.q);
   const rawEntityType = getQueryValue(resolvedSearchParams.entity_type) || "molecule";
   const showResults = getQueryValue(resolvedSearchParams.results) === "1";
   const modeConfig = getModeConfig(rawEntityType);
+  const modeHighlights = getModeHighlights(modeConfig);
 
   let loadError: string | null = null;
   let response: LiveSearchResponse | null = null;
@@ -90,6 +151,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </>
         }
       />
+
+      <section className="executive-summary-grid">
+        {modeHighlights.map((highlight) => (
+          <article key={highlight.label} className="executive-summary-card">
+            <span className="executive-summary-eyebrow">{highlight.label}</span>
+            <strong className="executive-summary-value">{highlight.value}</strong>
+            <p className="executive-summary-copy">{highlight.copy}</p>
+          </article>
+        ))}
+      </section>
 
       <section className="card search-panel">
         <div className="card-heading">
@@ -133,7 +204,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         </form>
 
-        <div className="button-row">
+        <div className="button-row search-example-row">
           {modeConfig.examples.map((example) => (
             <Link
               key={example}

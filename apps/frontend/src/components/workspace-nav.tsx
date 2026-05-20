@@ -15,12 +15,21 @@ export function WorkspaceNav() {
   return (
     <aside className="workspace-sidebar">
       <div className="brand-card">
-        <div className="brand-mark">RT</div>
+        <div className="brand-mark-wrap">
+          <div className="brand-mark">RT</div>
+        </div>
         <div>
+          <div className="brand-eyebrow">
+            {appConfig.publicDemoMode ? "Public prototype" : "Reviewer workspace"}
+          </div>
           <div className="brand-title">{appConfig.name}</div>
           <p className="brand-copy">
             Evidence, POD, and Risk Support for Nonclinical Safety
           </p>
+          <div className="brand-status-row">
+            <span className="brand-status">Live source retrieval</span>
+            <span className="brand-status subdued">Structured review surface</span>
+          </div>
         </div>
       </div>
 
