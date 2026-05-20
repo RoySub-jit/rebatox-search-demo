@@ -11,6 +11,7 @@ from xml.etree import ElementTree
 
 from app.schemas.live_search import (
     EntityType,
+    LiveWorkspaceExtractedSignal,
     LiveSearchResult,
     LiveWorkspaceResponse,
     LiveWorkspaceReviewCue,
@@ -122,6 +123,18 @@ def _first_section_paragraph(
             if section.key == key and section.content:
                 return section.content[0]
     return None
+
+
+def _first_section_excerpt(
+    sections: list[LiveWorkspaceSection],
+    *,
+    preferred_keys: tuple[str, ...],
+    fallback: str | None = None,
+) -> str | None:
+    excerpt = _first_section_paragraph(sections, preferred_keys=preferred_keys)
+    if excerpt:
+        return excerpt
+    return fallback
 
 
 def _extract_root_detail(root: ElementTree.Element) -> dict[str, object]:
@@ -236,6 +249,95 @@ def _build_result_from_detail(
     )
 
 
+def _build_dailymed_signals(
+    *,
+    detail: Mapping[str, object],
+    sections: list[LiveWorkspaceSection],
+) -> list[LiveWorkspaceExtractedSignal]:
+    signals: list[LiveWorkspaceExtractedSignal] = []
+
+    route = detail.get("route")
+    if isinstance(route, str) and route:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="route",
+                label="Route",
+                value=route,
+                confidence="high",
+            )
+        )
+
+    substance_names = detail.get("substance_names")
+    if isinstance(substance_names, list) and substance_names:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="active_ingredients",
+                label="Active ingredients",
+                value=", ".join(value for value in substance_names if isinstance(value, str)),
+                source_section_key="active_ingredient",
+                confidence="high",
+            )
+        )
+
+    indication_text = _first_section_excerpt(
+        sections,
+        preferred_keys=("uses", "indications_and_usage", "purpose"),
+    )
+    if indication_text:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="use_case",
+                label="Use / indication",
+                value=indication_text,
+                source_section_key="uses",
+                confidence="high",
+            )
+        )
+
+    dosage_text = _first_section_excerpt(
+        sections,
+        preferred_keys=("directions", "dosage_and_administration"),
+    )
+    if dosage_text:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="dosage_guidance",
+                label="Dosage guidance",
+                value=dosage_text,
+                source_section_key="directions",
+                confidence="medium",
+            )
+        )
+
+    warning_text = _first_section_excerpt(
+        sections,
+        preferred_keys=("warnings", "warnings_and_precautions", "boxed_warning"),
+    )
+    if warning_text:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="warning_signal",
+                label="Warnings",
+                value=warning_text,
+                source_section_key="warnings",
+                confidence="medium",
+            )
+        )
+
+    manufacturer_name = detail.get("manufacturer_name")
+    if isinstance(manufacturer_name, str) and manufacturer_name:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="manufacturer",
+                label="Manufacturer",
+                value=manufacturer_name,
+                confidence="high",
+            )
+        )
+
+    return signals
+
+
 def search_dailymed_records(
     *,
     entity_type: EntityType,
@@ -338,6 +440,7 @@ def resolve_dailymed_workspace(
             summary=summary,
         ),
         sections=sections,
+        extracted_signals=_build_dailymed_signals(detail=detail, sections=sections),
         review_cue=LiveWorkspaceReviewCue(
             title="DailyMed label review",
             description=(

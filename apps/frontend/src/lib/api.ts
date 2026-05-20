@@ -126,17 +126,38 @@ export type LiveWorkspaceSectionResponse = {
   content: string[];
 };
 
+export type LiveWorkspaceExtractedSignalResponse = {
+  key: string;
+  label: string;
+  value: string;
+  source_section_key: string | null;
+  confidence: "high" | "medium" | "low";
+};
+
 export type LiveWorkspaceResponse = {
   entity_type: SearchEntityType;
   query: string | null;
   record: LiveSearchResultResponse;
   sections: LiveWorkspaceSectionResponse[];
+  extracted_signals: LiveWorkspaceExtractedSignalResponse[];
   review_cue: {
     title: string;
     description: string;
   };
   retrieval_mode: "live";
   retrieved_at: string;
+};
+
+export type SavedWorkspaceResponse = {
+  id: number;
+  label: string;
+  notes: string | null;
+  entity_type: SearchEntityType;
+  provider: LiveSearchResultResponse["provider"];
+  external_id: string;
+  query: string | null;
+  saved_at: string;
+  workspace: LiveWorkspaceResponse;
 };
 
 export type MoleculeSearchResultResponse = {
@@ -520,4 +541,28 @@ export function resolveLiveWorkspace(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function saveLiveWorkspace(
+  apiBaseUrl: string,
+  payload: {
+    workspace: LiveWorkspaceResponse;
+    label?: string | null;
+    notes?: string | null;
+  },
+) {
+  return requestJson<SavedWorkspaceResponse>(apiBaseUrl, "/api/v1/workspaces/save", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getSavedWorkspace(apiBaseUrl: string, workspaceId: number) {
+  return requestJson<SavedWorkspaceResponse>(
+    apiBaseUrl,
+    `/api/v1/workspaces/${workspaceId}`,
+    {
+      method: "GET",
+    },
+  );
 }

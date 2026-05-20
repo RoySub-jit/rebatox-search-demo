@@ -2,10 +2,14 @@ import Link from "next/link";
 
 import { PageIntro } from "@/components/page-intro";
 import { StatusBadge } from "@/components/status-badge";
+import { WorkspaceSavePanel } from "@/components/workspace-save-panel";
 import {
   ApiClientError,
+  getSavedWorkspace,
   resolveLiveWorkspace,
   type LiveSearchResultResponse,
+  type LiveWorkspaceResponse,
+  type SavedWorkspaceResponse,
 } from "@/lib/api";
 import { appConfig } from "@/lib/config";
 import {
@@ -22,6 +26,7 @@ type WorkspacePageProps = {
     provider?: string | string[];
     id?: string | string[];
     q?: string | string[];
+    saved_id?: string | string[];
   }>;
 };
 
@@ -48,18 +53,27 @@ function isSupportedProvider(
   return provider === "openfda" || provider === "dailymed" || provider === "pubmed";
 }
 
+function buildBackToSearchHref(entityType: string, query: string | null): string {
+  return query
+    ? `/search?entity_type=${entityType}&q=${encodeURIComponent(query)}`
+    : `/search?entity_type=${entityType}`;
+}
+
 export default async function WorkspacePage({ searchParams }: WorkspacePageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
+  const savedWorkspaceId = getSingleValue(resolvedSearchParams.saved_id);
   const rawEntityType = getSingleValue(resolvedSearchParams.entity_type) || "molecule";
   const provider = getSingleValue(resolvedSearchParams.provider);
   const externalId = getSingleValue(resolvedSearchParams.id);
   const query = getSingleValue(resolvedSearchParams.q);
+  const hasSavedWorkspaceSelection = savedWorkspaceId.length > 0;
 
   if (
-    !isSearchEntityType(rawEntityType) ||
-    !provider ||
-    !externalId ||
-    !isSupportedProvider(provider)
+    !hasSavedWorkspaceSelection &&
+    (!isSearchEntityType(rawEntityType) ||
+      !provider ||
+      !externalId ||
+      !isSupportedProvider(provider))
   ) {
     return (
       <div className="page-stack">
@@ -85,21 +99,49 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     );
   }
 
-  const modeConfig = getSearchModeConfig(rawEntityType);
+  const resolvedEntityType = isSearchEntityType(rawEntityType)
+    ? rawEntityType
+    : "molecule";
+  const resolvedProvider = isSupportedProvider(provider) ? provider : "openfda";
 
   try {
-    const workspace = await resolveLiveWorkspace(appConfig.apiBaseUrl, {
-      entity_type: rawEntityType,
-      provider,
-      external_id: externalId,
-      query: query || null,
-    });
+    let workspace: LiveWorkspaceResponse;
+    let savedWorkspace: SavedWorkspaceResponse | null = null;
+    let entityType = resolvedEntityType;
+    let activeQuery = query || null;
+
+    if (hasSavedWorkspaceSelection) {
+      const numericId = Number(savedWorkspaceId);
+      if (!Number.isInteger(numericId) || numericId <= 0) {
+        throw new ApiClientError("Saved workspace id must be a positive integer.", 400);
+      }
+
+      savedWorkspace = await getSavedWorkspace(appConfig.apiBaseUrl, numericId);
+      workspace = savedWorkspace.workspace;
+      entityType = savedWorkspace.entity_type;
+      activeQuery = savedWorkspace.query;
+    } else {
+      workspace = await resolveLiveWorkspace(appConfig.apiBaseUrl, {
+        entity_type: resolvedEntityType,
+        provider: resolvedProvider,
+        external_id: externalId,
+        query: query || null,
+      });
+      activeQuery = workspace.query;
+    }
+
+    const modeConfig = getSearchModeConfig(entityType as LiveWorkspaceResponse["entity_type"]);
     const overviewRows = buildWorkspaceOverviewRows(workspace);
+    const backToSearchHref = buildBackToSearchHref(entityType, activeQuery);
 
     return (
       <div className="page-stack">
         <PageIntro
-          eyebrow={`Live ${modeConfig.label.toLowerCase()} workspace`}
+          eyebrow={
+            savedWorkspace
+              ? `Saved ${modeConfig.label.toLowerCase()} workspace`
+              : `Live ${modeConfig.label.toLowerCase()} workspace`
+          }
           title={workspace.record.title}
           description={
             workspace.record.summary ??
@@ -107,6 +149,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
           }
           actions={
             <>
+              <StatusBadge tone={savedWorkspace ? "success" : "info"}>
+                {savedWorkspace ? "Saved snapshot" : "Live retrieval"}
+              </StatusBadge>
               <StatusBadge tone="info">
                 {getProviderLabel(workspace.record.provider)}
               </StatusBadge>
@@ -121,14 +166,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
 
         <section className="card">
           <div className="button-row">
-            <Link
-              className="button-secondary search-example-link"
-              href={
-                query
-                  ? `/search?entity_type=${rawEntityType}&q=${encodeURIComponent(query)}`
-                  : `/search?entity_type=${rawEntityType}`
-              }
-            >
+            <Link className="button-secondary search-example-link" href={backToSearchHref}>
               Back to search
             </Link>
             {workspace.record.source_uri ? (
@@ -153,7 +191,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
               </p>
             </div>
             <StatusBadge tone="neutral">
-              Retrieved {formatPublishedAt(workspace.retrieved_at)}
+              {savedWorkspace
+                ? `Saved ${formatPublishedAt(savedWorkspace.saved_at)}`
+                : `Retrieved ${formatPublishedAt(workspace.retrieved_at)}`}
             </StatusBadge>
           </div>
 
@@ -233,6 +273,94 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
         <section className="card">
           <div className="card-heading">
             <div>
+              <h2>Extracted evidence signals</h2>
+              <p className="empty-copy">
+                Query-time signals distilled from the current source so a reviewer can
+                scan the useful evidence before diving into raw sections.
+              </p>
+            </div>
+            <StatusBadge
+              tone={workspace.extracted_signals.length > 0 ? "success" : "warning"}
+            >
+              {workspace.extracted_signals.length} extracted signals
+            </StatusBadge>
+          </div>
+
+          {workspace.extracted_signals.length === 0 ? (
+            <div className="empty-state">
+              <div>
+                <h3>No extracted signals were available</h3>
+                <p className="empty-copy">
+                  RebaTox did not infer structured evidence cues from this source
+                  payload yet.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="study-card-stack">
+              {workspace.extracted_signals.map((signal) => (
+                <article key={signal.key} className="study-card">
+                  <div className="study-card-copy">
+                    <h3>{signal.label}</h3>
+                    <p>{signal.value}</p>
+                  </div>
+                  <div className="button-row">
+                    <StatusBadge
+                      tone={
+                        signal.confidence === "high"
+                          ? "success"
+                          : signal.confidence === "medium"
+                            ? "warning"
+                            : "neutral"
+                      }
+                    >
+                      {signal.confidence} confidence
+                    </StatusBadge>
+                    {signal.source_section_key ? (
+                      <StatusBadge tone="neutral">
+                        Section: {signal.source_section_key}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {savedWorkspace ? (
+          <section className="card">
+            <div className="card-heading">
+              <div>
+                <h2>Saved snapshot details</h2>
+                <p className="empty-copy">
+                  This workspace was persisted from a live retrieval so the same review
+                  snapshot can be reopened later.
+                </p>
+              </div>
+            </div>
+            <div className="descriptor-list">
+              <div className="descriptor-row">
+                <span className="overview-label">Saved workspace id</span>
+                <strong>{savedWorkspace.id}</strong>
+              </div>
+              <div className="descriptor-row">
+                <span className="overview-label">Label</span>
+                <strong>{savedWorkspace.label}</strong>
+              </div>
+              <div className="descriptor-row">
+                <span className="overview-label">Saved at</span>
+                <strong>{formatPublishedAt(savedWorkspace.saved_at)}</strong>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <WorkspaceSavePanel apiBaseUrl={appConfig.apiBaseUrl} workspace={workspace} />
+        )}
+
+        <section className="card">
+          <div className="card-heading">
+            <div>
               <h2>Source sections</h2>
               <p className="empty-copy">
                 Structured source sections pulled into the live RebaTox workspace for
@@ -290,11 +418,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
           <div className="button-row">
             <Link
               className="button-secondary search-example-link"
-              href={
-                query
-                  ? `/search?entity_type=${rawEntityType}&q=${encodeURIComponent(query)}`
-                  : `/search?entity_type=${rawEntityType}`
-              }
+              href={buildBackToSearchHref(rawEntityType, query || null)}
             >
               Back to search
             </Link>

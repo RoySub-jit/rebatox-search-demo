@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
@@ -12,6 +13,7 @@ from xml.etree import ElementTree
 from app.schemas.live_search import (
     EntityType,
     LiveSearchResult,
+    LiveWorkspaceExtractedSignal,
     LiveWorkspaceResponse,
     LiveWorkspaceReviewCue,
     LiveWorkspaceSection,
@@ -23,6 +25,14 @@ from app.services.source_ingestion.pubmed import parse_pubmed_metadata
 PUBMED_ESEARCH_ENDPOINT = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 PUBMED_ESUMMARY_ENDPOINT = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 PUBMED_EFETCH_ENDPOINT = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+ROUTE_PATTERN = re.compile(
+    r"\b(oral|intravenous|intraperitoneal|subcutaneous|inhalation|topical|dermal|intranasal)\b",
+    re.IGNORECASE,
+)
+DOSE_PATTERN = re.compile(
+    r"\b\d+(?:\.\d+)?\s?(?:mg/kg(?:/day)?|mg/L|mg|ug/kg|µg/kg|ng/mL|ug/mL|µg/mL|uM|μM|nM|mM)\b",
+    re.IGNORECASE,
+)
 
 
 def _normalize_query(query: str) -> str:
@@ -269,6 +279,124 @@ def _extract_detail_metadata(root: ElementTree.Element) -> dict[str, object]:
     }
 
 
+def _infer_study_model(abstract_text: str, publication_types: list[str]) -> str | None:
+    haystack = f"{abstract_text} {' '.join(publication_types)}".casefold()
+    if any(token in haystack for token in ("patient", "clinical", "healthy volunteer", "human", "phase ")):
+        return "Human / clinical"
+    if any(token in haystack for token in ("rat", "mouse", "mice", "dog", "rabbit", "animal model")):
+        return "Animal / nonclinical"
+    if any(token in haystack for token in ("in vitro", "cell line", "cellular", "assay", "mechanistic")):
+        return "In vitro / mechanistic"
+    if publication_types:
+        return publication_types[0]
+    return None
+
+
+def _infer_focus(entity_type: EntityType, abstract_text: str, query: str | None) -> str | None:
+    haystack = abstract_text.casefold()
+    if entity_type == "degradant":
+        if any(token in haystack for token in ("degradant", "degradation", "impurity", "breakdown")):
+            return "Degradant / impurity signal"
+        return "Related degradant literature"
+    if entity_type == "el":
+        if any(token in haystack for token in ("extractable", "leachable", "packaging", "migrant")):
+            return "E&L / packaging signal"
+        return "Related E&L literature"
+    if query and query.casefold() in haystack:
+        return "Direct molecule literature"
+    return "Molecule-related literature"
+
+
+def _build_pubmed_signals(
+    *,
+    entity_type: EntityType,
+    detail_metadata: Mapping[str, object],
+    query: str | None,
+) -> list[LiveWorkspaceExtractedSignal]:
+    signals: list[LiveWorkspaceExtractedSignal] = []
+
+    abstract_paragraphs = [
+        value for value in detail_metadata.get("abstract_paragraphs", []) if isinstance(value, str)
+    ]
+    abstract_text = " ".join(abstract_paragraphs)
+    publication_types = [
+        value for value in detail_metadata.get("publication_types", []) if isinstance(value, str)
+    ]
+    keywords = [value for value in detail_metadata.get("keywords", []) if isinstance(value, str)]
+
+    focus = _infer_focus(entity_type, abstract_text, query)
+    if focus:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="evidence_focus",
+                label="Evidence focus",
+                value=focus,
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    study_model = _infer_study_model(abstract_text, publication_types)
+    if study_model:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="study_model",
+                label="Study model",
+                value=study_model,
+                source_section_key="publication_types" if publication_types else "abstract",
+                confidence="medium",
+            )
+        )
+
+    route_mentions = list(dict.fromkeys(match.group(1).lower() for match in ROUTE_PATTERN.finditer(abstract_text)))
+    if route_mentions:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="route_mentions",
+                label="Route mentions",
+                value=", ".join(route_mentions),
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    dose_mentions = list(dict.fromkeys(match.group(0) for match in DOSE_PATTERN.finditer(abstract_text)))
+    if dose_mentions:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="dose_or_exposure_context",
+                label="Dose / exposure context",
+                value="; ".join(dose_mentions[:4]),
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    if publication_types:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="publication_type",
+                label="Publication type",
+                value=", ".join(publication_types[:3]),
+                source_section_key="publication_types",
+                confidence="high",
+            )
+        )
+
+    if keywords:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="keyword_signal",
+                label="Keyword signal",
+                value=", ".join(keywords[:5]),
+                source_section_key="keywords",
+                confidence="low",
+            )
+        )
+
+    return signals
+
+
 def resolve_pubmed_workspace(
     *,
     entity_type: EntityType,
@@ -346,6 +474,11 @@ def resolve_pubmed_workspace(
             }
         ),
         sections=sections,
+        extracted_signals=_build_pubmed_signals(
+            entity_type=entity_type,
+            detail_metadata=detail_metadata,
+            query=query,
+        ),
         review_cue=LiveWorkspaceReviewCue(
             title="Literature-backed evidence review",
             description=(

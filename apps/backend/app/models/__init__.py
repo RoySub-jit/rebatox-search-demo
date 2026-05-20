@@ -10,6 +10,7 @@ from app.models.research import (
     Recommendation,
     Study,
 )
+from app.models.workspace import SavedWorkspace
 
 __all__ = [
     "AppSetting",
@@ -23,6 +24,7 @@ __all__ = [
     "Limitation",
     "Product",
     "Recommendation",
+    "SavedWorkspace",
     "SourceDocument",
     "Study",
 ]
