@@ -434,6 +434,33 @@ def _build_pubmed_signals(
             )
         )
 
+    if pod_sentence and dose_sentence:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="toxicology_takeaway",
+                label="Toxicology takeaway",
+                value=(
+                    "Dose context and explicit POD language were both identified in the abstract, "
+                    "which makes this article a stronger candidate for follow-up toxicology review."
+                ),
+                source_section_key="abstract",
+                confidence="high",
+            )
+        )
+    elif pod_sentence or dose_sentence:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="toxicology_takeaway",
+                label="Toxicology takeaway",
+                value=(
+                    "The abstract contains at least one structured toxicology cue "
+                    "(dose or POD language), but may still require a deeper full-text review."
+                ),
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
     if publication_types:
         signals.append(
             LiveWorkspaceExtractedSignal(
