@@ -104,6 +104,7 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
             <Journal><Title>Journal of Safety</Title></Journal>
             <Abstract>
               <AbstractText>Healthy volunteers received oral aspirin 50 mg/kg/day and plasma exposure was monitored.</AbstractText>
+              <AbstractText>NOAEL was identified at 50 mg/kg/day in the supporting toxicology package.</AbstractText>
             </Abstract>
             <PublicationTypeList>
               <PublicationType>Clinical Trial</PublicationType>
@@ -138,4 +139,7 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
     assert "study_model" in signal_keys
     assert "route_mentions" in signal_keys
     assert "dose_or_exposure_context" in signal_keys
+    assert "dose_sentence" in signal_keys
+    assert "pod_signal" in signal_keys
+    assert "exposure_signal" in signal_keys
     assert "publication_type" in signal_keys

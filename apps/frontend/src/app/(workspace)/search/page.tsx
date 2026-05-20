@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LiveSearchResults } from "@/components/live-search-results";
 import { PageIntro } from "@/components/page-intro";
@@ -11,6 +12,7 @@ import {
 } from "@/lib/api";
 import { appConfig } from "@/lib/config";
 import {
+  getPrimarySearchResult,
   getSearchModeConfig,
   isSearchEntityType,
   type SearchModeConfig,
@@ -20,6 +22,7 @@ type SearchPageProps = {
   searchParams?: Promise<{
     entity_type?: string | string[];
     q?: string | string[];
+    results?: string | string[];
   }>;
 };
 
@@ -52,6 +55,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
   const query = getQueryValue(resolvedSearchParams.q);
   const rawEntityType = getQueryValue(resolvedSearchParams.entity_type) || "molecule";
+  const showResults = getQueryValue(resolvedSearchParams.results) === "1";
   const modeConfig = getModeConfig(rawEntityType);
 
   let loadError: string | null = null;
@@ -60,6 +64,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   if (query.length >= 2) {
     try {
       response = await searchLiveRecords(appConfig.apiBaseUrl, modeConfig.value, query, 8);
+      const primaryResult = response.items.length
+        ? getPrimarySearchResult(modeConfig.value, response.items)
+        : null;
+      if (appConfig.publicDemoMode && primaryResult && !showResults) {
+        redirect(
+          `/workspace?entity_type=${response.entity_type}&provider=${primaryResult.provider}&id=${encodeURIComponent(primaryResult.external_id)}&q=${encodeURIComponent(response.query)}`,
+        );
+      }
     } catch (error) {
       loadError = describeLoadError(error);
     }
@@ -97,8 +109,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <div>
             <h2>Find an entity of interest</h2>
             <p className="empty-copy">
-              Search live public sources, then open a transient workspace grounded in
-              the selected source record.
+              Search live public sources. RebaTox will open the strongest current match
+              directly, with an option to review all other matches if needed.
             </p>
           </div>
           <StatusBadge tone="neutral">Query-based</StatusBadge>

@@ -1,31 +1,16 @@
-import Link from "next/link";
-
 import type { LiveSearchResponse } from "@/lib/api";
 import {
   formatPublishedAt,
-  getPrimarySearchResult,
   getProviderLabel,
   groupSearchResultsByProvider,
 } from "@/lib/live-workspace";
 
 import { StatusBadge } from "./status-badge";
 
-type LiveSearchResultsProps = {
-  response: LiveSearchResponse;
-};
-
-function buildWorkspaceHref(
-  entityType: string,
-  provider: string,
-  externalId: string,
-  query: string,
-): string {
-  return `/workspace?entity_type=${entityType}&provider=${provider}&id=${encodeURIComponent(externalId)}&q=${encodeURIComponent(query)}`;
-}
+type LiveSearchResultsProps = { response: LiveSearchResponse };
 
 export function LiveSearchResults({ response }: LiveSearchResultsProps) {
   const groups = groupSearchResultsByProvider(response.items);
-  const primaryResult = getPrimarySearchResult(response.entity_type, response.items);
 
   if (response.items.length === 0) {
     return (
@@ -43,63 +28,13 @@ export function LiveSearchResults({ response }: LiveSearchResultsProps) {
 
   return (
     <div className="results-stack">
-      {primaryResult ? (
-        <section className="card results-highlight">
-          <div className="card-heading">
-            <div>
-              <h3>Best match</h3>
-              <p className="empty-copy">
-                RebaTox picked the clearest current source record so you can open one
-                strong workspace path immediately.
-              </p>
-            </div>
-            <StatusBadge tone="success">{getProviderLabel(primaryResult.provider)}</StatusBadge>
-          </div>
-          <div className="task-item">
-            <div className="task-item-top">
-              <div>
-                <h4>{primaryResult.title}</h4>
-                <p>
-                  {primaryResult.summary ??
-                    primaryResult.subtitle ??
-                    "No summary snippet was available in the current source payload."}
-                </p>
-              </div>
-            </div>
-            <div className="button-row">
-              <Link
-                className="button-primary"
-                href={buildWorkspaceHref(
-                  response.entity_type,
-                  primaryResult.provider,
-                  primaryResult.external_id,
-                  response.query,
-                )}
-              >
-                Open best match in RebaTox
-              </Link>
-              {primaryResult.source_uri ? (
-                <a
-                  className="button-secondary search-example-link"
-                  href={primaryResult.source_uri}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open source
-                </a>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       {groups.map((group) => (
         <section key={group.provider} className="results-group">
           <div className="card-heading">
             <div>
               <h3>{group.label}</h3>
               <p className="empty-copy">
-                {group.items.length} live result{group.items.length === 1 ? "" : "s"} from{" "}
+                {group.items.length} alternative match{group.items.length === 1 ? "" : "es"} from{" "}
                 {getProviderLabel(group.provider)}.
               </p>
             </div>
@@ -157,19 +92,8 @@ export function LiveSearchResults({ response }: LiveSearchResultsProps) {
                   </div>
                 </div>
 
-                <div className="button-row">
-                  <Link
-                    className="button-primary"
-                    href={buildWorkspaceHref(
-                      response.entity_type,
-                      item.provider,
-                      item.external_id,
-                      response.query,
-                    )}
-                  >
-                    Open in RebaTox
-                  </Link>
-                  {item.source_uri ? (
+                {item.source_uri && item.provider !== "openfda" ? (
+                  <div className="button-row">
                     <a
                       className="button-secondary search-example-link"
                       href={item.source_uri}
@@ -178,8 +102,8 @@ export function LiveSearchResults({ response }: LiveSearchResultsProps) {
                     >
                       Open source
                     </a>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

@@ -55,8 +55,8 @@ function isSupportedProvider(
 
 function buildBackToSearchHref(entityType: string, query: string | null): string {
   return query
-    ? `/search?entity_type=${entityType}&q=${encodeURIComponent(query)}`
-    : `/search?entity_type=${entityType}`;
+    ? `/search?entity_type=${entityType}&q=${encodeURIComponent(query)}&results=1`
+    : `/search?entity_type=${entityType}&results=1`;
 }
 
 export default async function WorkspacePage({ searchParams }: WorkspacePageProps) {
@@ -169,7 +169,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             <Link className="button-secondary search-example-link" href={backToSearchHref}>
               Back to search
             </Link>
-            {workspace.record.source_uri ? (
+            {workspace.record.source_uri && workspace.record.provider !== "openfda" ? (
               <a
                 className="button-primary"
                 href={workspace.record.source_uri}

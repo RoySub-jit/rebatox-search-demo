@@ -33,6 +33,14 @@ DOSE_PATTERN = re.compile(
     r"\b\d+(?:\.\d+)?\s?(?:mg/kg(?:/day)?|mg/L|mg|ug/kg|µg/kg|ng/mL|ug/mL|µg/mL|uM|μM|nM|mM)\b",
     re.IGNORECASE,
 )
+POD_PATTERN = re.compile(
+    r"\b(?:NOAEL|LOAEL|POD|point of departure|benchmark dose|BMDL|BMD|MTD)\b",
+    re.IGNORECASE,
+)
+EXPOSURE_PATTERN = re.compile(
+    r"\b(?:AUC|Cmax|exposure|systemic exposure|plasma concentration|clearance|half-life)\b",
+    re.IGNORECASE,
+)
 
 
 def _normalize_query(query: str) -> str:
@@ -97,7 +105,11 @@ def _build_pubmed_search_expression(entity_type: EntityType, query: str) -> str:
 
     if entity_type == "molecule":
         return (
-            f"({quoted}[Title/Abstract] OR {quoted}[MeSH Terms])"
+            f"({quoted}[Title/Abstract] OR {quoted}[MeSH Terms]) AND "
+            "(toxicity[Title/Abstract] OR toxicology[Title/Abstract] OR dose[Title/Abstract] "
+            "OR dosing[Title/Abstract] OR exposure[Title/Abstract] OR pharmacokinetic*[Title/Abstract] "
+            'OR safety[Title/Abstract] OR noael[Title/Abstract] OR loael[Title/Abstract] '
+            'OR "point of departure"[Title/Abstract])'
         )
 
     if entity_type == "degradant":
@@ -323,6 +335,11 @@ def _build_pubmed_signals(
         value for value in detail_metadata.get("publication_types", []) if isinstance(value, str)
     ]
     keywords = [value for value in detail_metadata.get("keywords", []) if isinstance(value, str)]
+    abstract_sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", abstract_text)
+        if sentence.strip()
+    ]
 
     focus = _infer_focus(entity_type, abstract_text, query)
     if focus:
@@ -367,6 +384,51 @@ def _build_pubmed_signals(
                 key="dose_or_exposure_context",
                 label="Dose / exposure context",
                 value="; ".join(dose_mentions[:4]),
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    dose_sentence = next(
+        (sentence for sentence in abstract_sentences if DOSE_PATTERN.search(sentence)),
+        None,
+    )
+    if dose_sentence:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="dose_sentence",
+                label="Dose sentence",
+                value=dose_sentence,
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    pod_sentence = next(
+        (sentence for sentence in abstract_sentences if POD_PATTERN.search(sentence)),
+        None,
+    )
+    if pod_sentence:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="pod_signal",
+                label="POD / toxicology signal",
+                value=pod_sentence,
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    exposure_sentence = next(
+        (sentence for sentence in abstract_sentences if EXPOSURE_PATTERN.search(sentence)),
+        None,
+    )
+    if exposure_sentence:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="exposure_signal",
+                label="Exposure signal",
+                value=exposure_sentence,
                 source_section_key="abstract",
                 confidence="medium",
             )
