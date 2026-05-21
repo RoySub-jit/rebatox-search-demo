@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 import { LiveSearchResults } from "@/components/live-search-results";
 import { PageIntro } from "@/components/page-intro";
@@ -126,21 +124,24 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   if (query.length >= 2) {
     try {
       response = await searchLiveRecords(appConfig.apiBaseUrl, modeConfig.value, query, 8);
-      const primaryResult = response.items.length
-        ? getPrimarySearchResult(modeConfig.value, response.items)
-        : null;
-      if (appConfig.publicDemoMode && primaryResult && !showResults) {
-        redirect(
-          `/workspace?entity_type=${response.entity_type}&provider=${primaryResult.provider}&id=${encodeURIComponent(primaryResult.external_id)}&q=${encodeURIComponent(response.query)}`,
-        );
-      }
     } catch (error) {
-      if (isRedirectError(error)) {
-        throw error;
-      }
       loadError = describeLoadError(error);
     }
   }
+
+  const primaryResult = response?.items.length
+    ? getPrimarySearchResult(modeConfig.value, response.items)
+    : null;
+  const alternativeResults =
+    response && primaryResult
+      ? response.items.filter(
+          (item) =>
+            !(
+              item.provider === primaryResult.provider &&
+              item.external_id === primaryResult.external_id
+            ),
+        )
+      : response?.items ?? [];
 
   return (
     <div className="page-stack">
@@ -184,8 +185,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <div>
             <h2>Find an entity of interest</h2>
             <p className="empty-copy">
-              Search live public sources. RebaTox will open the strongest current match
-              directly, with an option to review all other matches if needed.
+              Search live public sources. RebaTox highlights the strongest current
+              match first, with an option to review the other source matches if needed.
             </p>
           </div>
           <StatusBadge tone="neutral">Query-based</StatusBadge>
@@ -258,22 +259,149 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </section>
       ) : null}
 
-      {response ? (
+      {response?.warnings.length ? (
+        <section className="card feedback-banner warning">
+          <div className="card-heading">
+            <div>
+              <h2>Partial live source coverage</h2>
+            </div>
+            <StatusBadge tone="warning">Upstream warning</StatusBadge>
+          </div>
+          <div className="section-text-stack">
+            {response.warnings.map((warning, index) => (
+              <p key={`search-warning-${index}`}>{warning}</p>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {response && primaryResult ? (
         <section className="card">
           <div className="card-heading">
             <div>
-              <h2>Search results</h2>
+              <h2>Best current match</h2>
               <p className="empty-copy">
-                Showing {response.items.length} live matches for{" "}
+                RebaTox selected the strongest current source-backed workspace for{" "}
                 <strong>{response.query}</strong>.
               </p>
             </div>
-            <StatusBadge tone={response.items.length > 0 ? "success" : "warning"}>
-              {response.total_results} source matches
+            <StatusBadge tone="success">
+              {primaryResult.provider}
             </StatusBadge>
           </div>
 
+          <article className="task-item">
+            <div className="task-item-top">
+              <div>
+                <h3>{primaryResult.title}</h3>
+                <p>
+                  {primaryResult.summary ??
+                    primaryResult.subtitle ??
+                    "No summary snippet was available in the current source payload."}
+                </p>
+              </div>
+              <div className="badge-row">
+                <StatusBadge tone="info">{primaryResult.provider}</StatusBadge>
+                {primaryResult.document_type ? (
+                  <StatusBadge tone="neutral">{primaryResult.document_type}</StatusBadge>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="search-result-meta">
+              {primaryResult.generic_name ? (
+                <div className="overview-block">
+                  <span className="overview-label">Generic</span>
+                  <strong>{primaryResult.generic_name}</strong>
+                </div>
+              ) : null}
+              {primaryResult.brand_names.length > 0 ? (
+                <div className="overview-block">
+                  <span className="overview-label">Brands</span>
+                  <strong>{primaryResult.brand_names.join(", ")}</strong>
+                </div>
+              ) : null}
+              {primaryResult.journal ? (
+                <div className="overview-block">
+                  <span className="overview-label">Journal</span>
+                  <strong>{primaryResult.journal}</strong>
+                </div>
+              ) : null}
+              <div className="overview-block">
+                <span className="overview-label">Published</span>
+                <strong>{primaryResult.published_at ?? "Not reported"}</strong>
+              </div>
+            </div>
+
+            <div className="button-row">
+              <Link
+                className="button-primary"
+                href={`/workspace?entity_type=${primaryResult.entity_type}&provider=${primaryResult.provider}&id=${encodeURIComponent(primaryResult.external_id)}&q=${encodeURIComponent(response.query)}`}
+              >
+                Open best match in RebaTox
+              </Link>
+              {primaryResult.source_uri && primaryResult.provider !== "openfda" ? (
+                <a
+                  className="button-secondary search-example-link"
+                  href={primaryResult.source_uri}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open source
+                </a>
+              ) : null}
+              {alternativeResults.length > 0 && !showResults ? (
+                <Link
+                  className="button-secondary search-example-link"
+                  href={`/search?entity_type=${response.entity_type}&q=${encodeURIComponent(response.query)}&results=1`}
+                >
+                  View {alternativeResults.length} other match{alternativeResults.length === 1 ? "" : "es"}
+                </Link>
+              ) : null}
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {response && !primaryResult ? (
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2>No high-confidence live match</h2>
+              <p className="empty-copy">
+                RebaTox did not find a strong current workspace for{" "}
+                <strong>{response.query}</strong>. You can still review any low-signal
+                source matches below.
+              </p>
+            </div>
+            <StatusBadge tone="warning">No primary match</StatusBadge>
+          </div>
+
           <LiveSearchResults response={response} />
+        </section>
+      ) : null}
+
+      {response && primaryResult && showResults ? (
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2>Other source matches</h2>
+              <p className="empty-copy">
+                Compare alternate live sources for <strong>{response.query}</strong>.
+              </p>
+            </div>
+            <StatusBadge tone={alternativeResults.length > 0 ? "success" : "warning"}>
+              {alternativeResults.length} alternative matches
+            </StatusBadge>
+          </div>
+
+          <LiveSearchResults
+            response={{
+              ...response,
+              total_results: alternativeResults.length,
+              items: alternativeResults,
+            }}
+          />
         </section>
       ) : null}
     </div>

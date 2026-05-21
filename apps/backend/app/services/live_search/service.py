@@ -91,6 +91,10 @@ def _search_single_source(
     raise ValueError(f"Provider '{source}' is not yet supported for live search.")
 
 
+def _source_warning(*, source: SourceProviderName, error: Exception) -> str:
+    return f"{source} was unavailable for this search: {error}"
+
+
 def _normalize_text(value: str | None) -> str:
     if not value:
         return ""
@@ -202,14 +206,20 @@ def search_live_records(
         per_source_limit = max(1, ceil(safe_limit / max(len(sources), 1)))
         items: list[LiveSearchResult] = []
         seen_keys: set[tuple[str, str]] = set()
+        warnings: list[str] = []
 
         for source in sources:
-            source_items = _search_single_source(
-                entity_type=entity_type,
-                source=source,
-                query=normalized_query,
-                limit=per_source_limit,
-            )
+            try:
+                source_items = _search_single_source(
+                    entity_type=entity_type,
+                    source=source,
+                    query=normalized_query,
+                    limit=per_source_limit,
+                )
+            except RuntimeError as exc:
+                warnings.append(_source_warning(source=source, error=exc))
+                continue
+
             for item in source_items:
                 item_key = (item.provider, item.external_id)
                 if item_key in seen_keys:
@@ -227,6 +237,7 @@ def search_live_records(
             sources=list(sources),
             limit=safe_limit,
             total_results=min(len(items), safe_limit),
+            warnings=warnings,
             items=items[:safe_limit],
         )
 

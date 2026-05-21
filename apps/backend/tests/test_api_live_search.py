@@ -47,6 +47,7 @@ def test_live_search_route_returns_mixed_results(client, monkeypatch) -> None:
             sources=["openfda", "dailymed", "pubchem", "pubmed", "echa"],
             limit=limit,
             total_results=5,
+            warnings=[],
             items=[
                 _build_result(
                     entity_type="molecule",
@@ -91,6 +92,7 @@ def test_live_search_route_returns_mixed_results(client, monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["sources"] == ["openfda", "dailymed", "pubchem", "pubmed", "echa"]
+    assert payload["warnings"] == []
     assert payload["items"][1]["provider"] == "dailymed"
     assert payload["items"][2]["provider"] == "pubchem"
     assert payload["items"][3]["provider"] == "pubmed"

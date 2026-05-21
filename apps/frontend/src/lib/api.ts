@@ -118,6 +118,7 @@ export type LiveSearchResponse = {
   sources: LiveSourceProvider[];
   limit: number;
   total_results: number;
+  warnings: string[];
   items: LiveSearchResultResponse[];
 };
 

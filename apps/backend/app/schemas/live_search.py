@@ -38,6 +38,7 @@ class LiveSearchResponse(BaseModel):
     sources: list[SourceProviderName] = Field(default_factory=list)
     limit: int
     total_results: int
+    warnings: list[str] = Field(default_factory=list)
     items: list[LiveSearchResult] = Field(default_factory=list)
 
 

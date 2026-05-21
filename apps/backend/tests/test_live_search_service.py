@@ -238,6 +238,7 @@ def test_search_live_records_returns_empty_response_when_no_source_hits(
     assert response.entity_type == "degradant"
     assert response.sources == ["pubmed", "echa"]
     assert response.total_results == 0
+    assert response.warnings == []
     assert response.items == []
 
 
@@ -267,6 +268,37 @@ def test_search_live_records_uses_cache(monkeypatch) -> None:
 
     assert calls["count"] == 2
     assert first.items[0].external_id == second.items[0].external_id
+
+
+def test_search_live_records_tolerates_single_source_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        service,
+        "search_pubmed_records",
+        lambda **_: [
+            _build_result(
+                entity_type="el",
+                provider="pubmed",
+                external_id="pm-1",
+                title="Leachables review",
+            )
+        ],
+    )
+
+    def fake_echa(**_: object):
+        raise RuntimeError("Upstream regulatory search is temporarily unavailable.")
+
+    monkeypatch.setattr(service, "search_echa_records", fake_echa)
+
+    response = service.search_live_records(
+        entity_type="el",
+        query="leachables",
+        limit=4,
+    )
+
+    assert response.total_results == 1
+    assert response.items[0].provider == "pubmed"
+    assert len(response.warnings) == 1
+    assert "echa was unavailable" in response.warnings[0]
 
 
 def test_resolve_live_workspace_routes_to_provider(monkeypatch) -> None:
