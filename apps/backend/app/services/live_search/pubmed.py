@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
@@ -42,6 +43,9 @@ EXPOSURE_PATTERN = re.compile(
     r"\b(?:AUC|Cmax|exposure|systemic exposure|plasma concentration|clearance|half-life)\b",
     re.IGNORECASE,
 )
+PUBMED_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+PUBMED_MAX_ATTEMPTS = 3
+PUBMED_RETRY_BACKOFF_SECONDS = 1.5
 
 
 def _normalize_query(query: str) -> str:
@@ -50,6 +54,29 @@ def _normalize_query(query: str) -> str:
         raise ValueError("Search queries must be at least 2 characters long.")
 
     return normalized
+
+
+def _read_pubmed_payload(request: Request) -> str:
+    last_error: Exception | None = None
+
+    for attempt in range(1, PUBMED_MAX_ATTEMPTS + 1):
+        try:
+            with urlopen(request, timeout=20) as response:  # noqa: S310
+                return response.read().decode("utf-8")
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code not in PUBMED_RETRY_STATUS_CODES or attempt >= PUBMED_MAX_ATTEMPTS:
+                raise RuntimeError(f"PubMed request failed: {exc.reason}") from exc
+        except URLError as exc:
+            last_error = exc
+            if attempt >= PUBMED_MAX_ATTEMPTS:
+                raise RuntimeError(f"PubMed request failed: {exc.reason}") from exc
+
+        time.sleep(PUBMED_RETRY_BACKOFF_SECONDS * attempt)
+
+    if last_error is not None:
+        raise RuntimeError("PubMed request failed after retries.") from last_error
+    raise RuntimeError("PubMed request failed before a response was returned.")
 
 
 def _fetch_json(endpoint: str, params: Mapping[str, str]) -> dict[str, Any]:
@@ -63,12 +90,9 @@ def _fetch_json(endpoint: str, params: Mapping[str, str]) -> dict[str, Any]:
     )
 
     try:
-        with urlopen(request, timeout=15) as response:  # noqa: S310
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        raise RuntimeError(f"PubMed request failed: {exc.reason}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"PubMed request failed: {exc.reason}") from exc
+        payload = json.loads(_read_pubmed_payload(request))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("PubMed returned malformed JSON.") from exc
 
     if not isinstance(payload, dict):
         raise RuntimeError("PubMed returned an unexpected response payload.")
@@ -86,14 +110,7 @@ def _fetch_xml(endpoint: str, params: Mapping[str, str]) -> ElementTree.Element:
         },
     )
 
-    try:
-        with urlopen(request, timeout=15) as response:  # noqa: S310
-            payload = response.read().decode("utf-8")
-    except HTTPError as exc:
-        raise RuntimeError(f"PubMed request failed: {exc.reason}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"PubMed request failed: {exc.reason}") from exc
-
+    payload = _read_pubmed_payload(request)
     try:
         return ElementTree.fromstring(payload)
     except ElementTree.ParseError as exc:
