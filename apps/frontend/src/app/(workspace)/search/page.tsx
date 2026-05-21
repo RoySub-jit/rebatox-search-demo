@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 import { LiveSearchResults } from "@/components/live-search-results";
 import { PageIntro } from "@/components/page-intro";
 import { SearchModeSwitcher } from "@/components/search-mode-switcher";
