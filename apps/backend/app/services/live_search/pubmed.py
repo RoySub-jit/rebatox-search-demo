@@ -252,6 +252,81 @@ def _build_search_result(
     )
 
 
+def _pubmed_result_rank(
+    *,
+    entity_type: EntityType,
+    item: LiveSearchResult,
+) -> tuple[float, int]:
+    title = (item.title or "").casefold()
+    summary = (item.summary or "").casefold()
+    subtitle = (item.subtitle or "").casefold()
+    journal = (item.journal or "").casefold()
+    haystack = " ".join(
+        value for value in [title, summary, subtitle, journal, " ".join(item.keywords).casefold()] if value
+    )
+
+    score = 0.0
+    positive_terms = [
+        "toxicity",
+        "toxicology",
+        "risk",
+        "safety",
+        "exposure",
+        "dose",
+        "dosing",
+        "pharmacokinetic",
+        "pharmacokinetics",
+        "noael",
+        "loael",
+        "noaec",
+        "loaec",
+        "benchmark dose",
+        "bmdl",
+        "bmd",
+        "carcinogenic",
+        "genotoxic",
+        "repeatdose",
+        "repeated dose",
+        "subchronic",
+        "chronic",
+    ]
+    negative_terms = [
+        "analytical method",
+        "analytical methods",
+        "determination",
+        "quantification",
+        "chromatograph",
+        "spectrometr",
+        "assay",
+        "method validation",
+        "detection of",
+    ]
+
+    for term in positive_terms:
+        if term in haystack:
+            score += 2.0 if term in title else 1.0
+
+    for term in negative_terms:
+        if term in haystack:
+            score -= 2.0 if term in title else 1.0
+
+    if entity_type == "degradant":
+        for term in ("impurity", "degradant", "degradation", "nitrosamine", "toxicology", "risk"):
+            if term in haystack:
+                score += 1.5
+    if entity_type == "el":
+        for term in ("extractable", "leachable", "packaging", "migrant", "endocrine", "toxicology"):
+            if term in haystack:
+                score += 1.5
+    if entity_type == "molecule":
+        for term in ("clinical", "human", "volunteer", "toxicology", "safety"):
+            if term in haystack:
+                score += 1.0
+
+    richness = len(item.authors) + len(item.keywords) + (1 if item.summary else 0)
+    return score, richness
+
+
 def search_pubmed_records(
     *,
     entity_type: EntityType,
@@ -260,10 +335,12 @@ def search_pubmed_records(
 ) -> list[LiveSearchResult]:
     ids = _fetch_pubmed_ids(entity_type=entity_type, query=query, limit=limit)
     records = _fetch_pubmed_summary_records(ids)
-    return [
+    items = [
         _build_search_result(entity_type=entity_type, record=record)
         for record in records
     ]
+    items.sort(key=lambda item: _pubmed_result_rank(entity_type=entity_type, item=item), reverse=True)
+    return items
 
 
 def _extract_detail_metadata(root: ElementTree.Element) -> dict[str, object]:

@@ -121,9 +121,30 @@ test("live-workspace helpers choose a primary match for direct opening", () => {
       journal: null,
       keywords: [],
     },
+    {
+      entity_type: "molecule",
+      provider: "pubchem",
+      external_id: "2244",
+      title: "Aspirin",
+      subtitle: "Chemical record",
+      summary: "Chemical profile with toxicity sections.",
+      document_type: "chemical_record",
+      published_at: "2026-05-20",
+      source_uri: "https://pubchem.ncbi.nlm.nih.gov/compound/2244",
+      identifiers: [],
+      generic_name: null,
+      brand_names: ["Aspirin"],
+      manufacturer_names: [],
+      routes: [],
+      substance_names: ["Acetylsalicylic acid"],
+      product_type: null,
+      authors: [],
+      journal: null,
+      keywords: [],
+    },
   ];
 
-  assert.equal(getPrimarySearchResult("molecule", items)?.provider, "openfda");
+  assert.equal(getPrimarySearchResult("molecule", items)?.provider, "pubchem");
   assert.equal(getPrimarySearchResult("degradant", items)?.provider, "pubmed");
   assert.equal(
     getPrimarySearchResult("molecule", [

@@ -64,3 +64,42 @@ def test_read_pubmed_payload_raises_after_retry_exhaustion(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="PubMed request failed: Too Many Requests"):
         pubmed._read_pubmed_payload(request)
+
+
+def test_search_pubmed_records_ranks_toxicology_records_above_analytical_method_records(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        pubmed,
+        "_fetch_pubmed_ids",
+        lambda **_kwargs: ["1", "2"],
+    )
+    monkeypatch.setattr(
+        pubmed,
+        "_fetch_pubmed_summary_records",
+        lambda _ids: [
+            {
+                "uid": "1",
+                "title": "NDMA impurity in valsartan and other pharmaceutical products: Analytical methods for the determination of N-nitrosamines.",
+                "fulljournalname": "Journal of pharmaceutical and biomedical analysis",
+                "pubdate": "2019 Feb",
+                "authors": [{"name": "Parr MK"}],
+            },
+            {
+                "uid": "2",
+                "title": "Toxicological risk assessment of NDMA exposure after repeated oral dosing.",
+                "fulljournalname": "Toxicology letters",
+                "pubdate": "2021 Jan",
+                "authors": [{"name": "Smith J"}],
+            },
+        ],
+    )
+
+    items = pubmed.search_pubmed_records(
+        entity_type="degradant",
+        query="ndma",
+        limit=10,
+    )
+
+    assert items[0].external_id == "2"
+    assert "Toxicological risk assessment" in items[0].title

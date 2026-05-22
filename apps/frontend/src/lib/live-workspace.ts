@@ -136,13 +136,13 @@ export function getPrimarySearchResult(
   }
 
   if (entityType === "molecule") {
+    const podOrHazardMatch =
+      items.find((item) => item.provider === "pubchem") ??
+      items.find((item) => item.provider === "pubmed");
     const labelSourceMatch = items.find(
-      (item) =>
-        item.provider === "openfda" ||
-        item.provider === "dailymed" ||
-        item.provider === "pubchem",
+      (item) => item.provider === "dailymed" || item.provider === "openfda",
     );
-    return labelSourceMatch ?? items[0];
+    return podOrHazardMatch ?? labelSourceMatch ?? items[0];
   }
 
   return items[0];
