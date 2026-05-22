@@ -148,10 +148,12 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     const evidenceQualityRows = buildEvidenceQualityRows(workspace);
     const backToSearchHref = buildBackToSearchHref(entityType, activeQuery);
     const workspaceStateLabel = savedWorkspace ? "Saved reviewer snapshot" : "Live source workspace";
-    const worksheetCandidate =
-      workspace.pod_worksheet.selected_candidate ?? workspace.pod_analysis.primary_candidate;
-    const worksheetWarnings = workspace.pod_worksheet.warnings;
-    const worksheetCalculations = workspace.pod_worksheet.calculations;
+  const worksheetCandidate =
+    workspace.pod_worksheet.selected_candidate ?? workspace.pod_analysis.primary_candidate;
+  const hasManualWorksheetBasis =
+    workspace.pod_worksheet.manual_basis_mg_per_kg_day !== null;
+  const worksheetWarnings = workspace.pod_worksheet.warnings;
+  const worksheetCalculations = workspace.pod_worksheet.calculations;
     const otherCandidates =
       workspace.pod_analysis.candidates.filter((_, index) => {
         if (workspace.pod_worksheet.selected_candidate_index === null) {
@@ -406,10 +408,14 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             </div>
             <StatusBadge
               tone={
-                worksheetCandidate ? "success" : "warning"
+                worksheetCandidate || hasManualWorksheetBasis ? "success" : "warning"
               }
             >
-              {worksheetCandidate ? "Worksheet candidate selected" : "No candidate selected"}
+              {worksheetCandidate
+                ? "Worksheet candidate selected"
+                : hasManualWorksheetBasis
+                  ? "Manual worksheet basis selected"
+                  : "No candidate selected"}
             </StatusBadge>
           </div>
 
@@ -473,6 +479,47 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
                 ) : null}
               </article>
             </div>
+          ) : hasManualWorksheetBasis ? (
+            <div className="study-card-stack">
+              <article className="study-card">
+                <div className="study-card-copy">
+                  <h3>Reviewer-entered worksheet basis</h3>
+                  <p>
+                    This workspace does not expose a directly extracted dose-bearing
+                    POD in the current live source, so the worksheet is using a
+                    reviewer-entered screening basis for professional curation.
+                  </p>
+                </div>
+                <div className="descriptor-list">
+                  <div className="descriptor-row">
+                    <span className="overview-label">Worksheet basis</span>
+                    <strong>
+                      {workspace.pod_worksheet.selected_basis_mg_per_kg_day !== null
+                        ? `${workspace.pod_worksheet.selected_basis_mg_per_kg_day.toPrecision(3)} mg/kg/day`
+                        : "Not reported"}
+                    </strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Basis label</span>
+                    <strong>
+                      {workspace.pod_worksheet.selected_basis_label ??
+                        "Reviewer-entered screening basis"}
+                    </strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Reviewer status</span>
+                    <strong>{workspace.pod_worksheet.reviewer_status}</strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Body weight / UF</span>
+                    <strong>
+                      {workspace.pod_worksheet.body_weight_kg.toPrecision(3)} kg · UF{" "}
+                      {workspace.pod_worksheet.uncertainty_factor.toPrecision(3)}
+                    </strong>
+                  </div>
+                </div>
+              </article>
+            </div>
           ) : (
             <div className="empty-state">
               <div>
@@ -480,7 +527,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
                 <p className="empty-copy">
                   The current source may still be useful for hazard, route, or
                   identity review, but it did not expose enough structured dose text
-                  for a screening POD derivation.
+                  for a screening POD derivation. Use the reviewer worksheet below to
+                  enter a curated screening basis if you still want to carry the topic
+                  forward for stewardship review.
                 </p>
               </div>
             </div>

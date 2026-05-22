@@ -173,6 +173,8 @@ export type LiveWorkspacePodWorksheetResponse = {
   use_human_equivalent_dose: boolean;
   reviewer_status: "draft" | "reviewed" | "accepted" | "rejected";
   reviewer_notes: string | null;
+  manual_basis_label: string | null;
+  manual_basis_mg_per_kg_day: number | null;
   selected_candidate: LiveWorkspaceDoseCandidateResponse | null;
   selected_basis_label: string | null;
   selected_basis_mg_per_kg_day: number | null;

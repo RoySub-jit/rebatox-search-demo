@@ -23,6 +23,8 @@ type WorksheetDraft = {
   label: string;
   notes: string;
   selectedCandidateIndex: string;
+  manualBasisLabel: string;
+  manualBasisMgPerKgDay: string;
   bodyWeightKg: string;
   uncertaintyFactor: string;
   useHumanEquivalentDose: boolean;
@@ -47,6 +49,11 @@ function buildDraft(
     selectedCandidateIndex:
       workspace.pod_worksheet.selected_candidate_index !== null
         ? String(workspace.pod_worksheet.selected_candidate_index)
+        : "",
+    manualBasisLabel: workspace.pod_worksheet.manual_basis_label ?? "",
+    manualBasisMgPerKgDay:
+      workspace.pod_worksheet.manual_basis_mg_per_kg_day !== null
+        ? String(workspace.pod_worksheet.manual_basis_mg_per_kg_day)
         : "",
     bodyWeightKg: String(workspace.pod_worksheet.body_weight_kg ?? 50),
     uncertaintyFactor: String(workspace.pod_worksheet.uncertainty_factor ?? 100),
@@ -113,6 +120,10 @@ export function PodWorksheetPanel({
 
     const bodyWeightKg = Number(draft.bodyWeightKg);
     const uncertaintyFactor = Number(draft.uncertaintyFactor);
+    const manualBasisMgPerKgDay =
+      draft.manualBasisMgPerKgDay.trim() === ""
+        ? null
+        : Number(draft.manualBasisMgPerKgDay);
     const selectedCandidateIndex =
       draft.selectedCandidateIndex.trim() === ""
         ? null
@@ -126,6 +137,16 @@ export function PodWorksheetPanel({
     if (!Number.isFinite(uncertaintyFactor) || uncertaintyFactor < 1) {
       setRequestError(
         "Composite uncertainty factor must be at least 1 before saving the worksheet.",
+      );
+      return;
+    }
+
+    if (
+      manualBasisMgPerKgDay !== null &&
+      (!Number.isFinite(manualBasisMgPerKgDay) || manualBasisMgPerKgDay <= 0)
+    ) {
+      setRequestError(
+        "Manual screening basis must be a positive mg/kg/day value before saving the worksheet.",
       );
       return;
     }
@@ -148,6 +169,8 @@ export function PodWorksheetPanel({
         pod_worksheet: {
           ...workspace.pod_worksheet,
           selected_candidate_index: selectedCandidateIndex,
+          manual_basis_label: draft.manualBasisLabel.trim() || null,
+          manual_basis_mg_per_kg_day: manualBasisMgPerKgDay,
           body_weight_kg: bodyWeightKg,
           uncertainty_factor: uncertaintyFactor,
           use_human_equivalent_dose:
@@ -277,6 +300,49 @@ export function PodWorksheetPanel({
           <p className="field-note">
             RebaTox will recompute the worksheet using the selected ranked candidate.
           </p>
+        </div>
+        <div className="field">
+          <label className="field-label" htmlFor="worksheet-manual-basis">
+            Manual worksheet basis (mg/kg/day)
+          </label>
+          <input
+            id="worksheet-manual-basis"
+            className="input-control"
+            type="number"
+            min="0.000001"
+            step="0.000001"
+            value={draft.manualBasisMgPerKgDay}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                manualBasisMgPerKgDay: event.target.value,
+              }))
+            }
+          />
+          <p className="field-note">
+            Use this when the current live source is useful for hazard context but
+            does not expose a numeric dose-bearing POD in the abstract.
+          </p>
+        </div>
+      </div>
+
+      <div className="field-grid">
+        <div className="field">
+          <label className="field-label" htmlFor="worksheet-manual-label">
+            Manual basis label
+          </label>
+          <input
+            id="worksheet-manual-label"
+            className="input-control"
+            value={draft.manualBasisLabel}
+            placeholder="Example: reviewer-entered TTC screening basis"
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                manualBasisLabel: event.target.value,
+              }))
+            }
+          />
         </div>
         <div className="field">
           <label className="field-label" htmlFor="worksheet-notes">

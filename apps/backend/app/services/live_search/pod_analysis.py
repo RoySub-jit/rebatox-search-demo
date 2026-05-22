@@ -379,8 +379,17 @@ def _worksheet_basis_for_candidate(
     *,
     candidate: LiveWorkspaceDoseCandidate | None,
     use_human_equivalent_dose: bool,
+    manual_basis_label: str | None = None,
+    manual_basis_mg_per_kg_day: float | None = None,
 ) -> tuple[float | None, float | None, str | None, list[str]]:
     warnings: list[str] = []
+    if manual_basis_mg_per_kg_day is not None:
+        label = (manual_basis_label or "").strip() or "Reviewer-entered screening basis"
+        warnings.append(
+            "Worksheet calculations are using a reviewer-entered screening basis rather than a directly extracted dose-bearing POD candidate."
+        )
+        return manual_basis_mg_per_kg_day, None, label, warnings
+
     if candidate is None:
         return None, None, None, ["No candidate is currently selected for the POD worksheet."]
 
@@ -450,11 +459,21 @@ def build_pod_worksheet(
         if current_worksheet and current_worksheet.reviewer_notes
         else None
     )
+    manual_basis_label = (
+        current_worksheet.manual_basis_label.strip()
+        if current_worksheet and current_worksheet.manual_basis_label
+        else None
+    )
+    manual_basis_mg_per_kg_day = (
+        current_worksheet.manual_basis_mg_per_kg_day if current_worksheet else None
+    )
 
     selected_basis_mg_per_kg_day, hed_basis_mg_per_kg_day, selected_basis_label, warnings = (
         _worksheet_basis_for_candidate(
             candidate=selected_candidate,
             use_human_equivalent_dose=use_human_equivalent_dose,
+            manual_basis_label=manual_basis_label,
+            manual_basis_mg_per_kg_day=manual_basis_mg_per_kg_day,
         )
     )
 
@@ -532,6 +551,8 @@ def build_pod_worksheet(
         use_human_equivalent_dose=use_human_equivalent_dose,
         reviewer_status=reviewer_status,
         reviewer_notes=reviewer_notes,
+        manual_basis_label=manual_basis_label,
+        manual_basis_mg_per_kg_day=manual_basis_mg_per_kg_day,
         selected_candidate=selected_candidate,
         selected_basis_label=selected_basis_label,
         selected_basis_mg_per_kg_day=selected_basis_mg_per_kg_day,

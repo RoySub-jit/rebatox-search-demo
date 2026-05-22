@@ -98,6 +98,8 @@ class LiveWorkspacePodWorksheet(BaseModel):
     use_human_equivalent_dose: bool = False
     reviewer_status: Literal["draft", "reviewed", "accepted", "rejected"] = "draft"
     reviewer_notes: str | None = Field(default=None, max_length=4000)
+    manual_basis_label: str | None = Field(default=None, max_length=255)
+    manual_basis_mg_per_kg_day: float | None = Field(default=None, gt=0, le=100_000)
     selected_candidate: LiveWorkspaceDoseCandidate | None = None
     selected_basis_label: str | None = None
     selected_basis_mg_per_kg_day: float | None = None

@@ -3,9 +3,10 @@ from __future__ import annotations
 from app.schemas.live_search import (
     LiveSearchResult,
     LiveWorkspaceExtractedSignal,
+    LiveWorkspacePodWorksheet,
     LiveWorkspaceSection,
 )
-from app.services.live_search.pod_analysis import build_pod_analysis
+from app.services.live_search.pod_analysis import build_pod_analysis, build_pod_worksheet
 
 
 def test_build_pod_analysis_normalizes_microgram_per_kg_day_candidates() -> None:
@@ -123,3 +124,47 @@ def test_build_pod_analysis_supports_bw_style_units_and_noaec_terms() -> None:
     assert analysis.primary_candidate.duration == "13 weeks"
     assert analysis.primary_candidate.normalized_mg_per_kg_day == 25.0
     assert analysis.primary_candidate.normalization_note == "Direct mg/kg/day basis from the source text."
+
+
+def test_build_pod_worksheet_supports_reviewer_entered_manual_basis() -> None:
+    record = LiveSearchResult(
+        entity_type="el",
+        provider="pubmed",
+        external_id="pm-4",
+        title="Extractables review note",
+    )
+    analysis = build_pod_analysis(
+        record=record,
+        sections=[
+            LiveWorkspaceSection(
+                key="abstract",
+                title="Abstract",
+                content=[
+                    "This review discusses extractables and leachables risk assessment strategy without giving a numeric POD in the abstract.",
+                ],
+            )
+        ],
+        extracted_signals=[],
+    )
+
+    worksheet = build_pod_worksheet(
+        pod_analysis=analysis,
+        current_worksheet=LiveWorkspacePodWorksheet(
+            manual_basis_label="Reviewer-entered TTC screening basis",
+            manual_basis_mg_per_kg_day=0.03,
+            body_weight_kg=60.0,
+            uncertainty_factor=10.0,
+        ),
+    )
+
+    assert worksheet.selected_candidate is None
+    assert worksheet.manual_basis_label == "Reviewer-entered TTC screening basis"
+    assert worksheet.manual_basis_mg_per_kg_day == 0.03
+    assert worksheet.selected_basis_label == "Reviewer-entered TTC screening basis"
+    assert worksheet.selected_basis_mg_per_kg_day == 0.03
+    assert worksheet.screening_intake_mg_day == 1.7999999999999998
+    assert worksheet.uf_adjusted_intake_mg_day == 0.18
+    assert any(
+        "reviewer-entered screening basis" in warning.lower()
+        for warning in worksheet.warnings
+    )
