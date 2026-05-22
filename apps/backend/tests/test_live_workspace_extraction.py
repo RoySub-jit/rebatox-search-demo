@@ -103,7 +103,7 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
             <ArticleTitle>A clinical aspirin exposure study</ArticleTitle>
             <Journal><Title>Journal of Safety</Title></Journal>
             <Abstract>
-              <AbstractText>Healthy volunteers received oral aspirin 50 mg/kg/day and plasma exposure was monitored.</AbstractText>
+              <AbstractText>Healthy volunteers received oral aspirin 50 mg/kg/day for 14 days and plasma exposure was monitored.</AbstractText>
               <AbstractText>NOAEL was identified at 50 mg/kg/day in the supporting toxicology package.</AbstractText>
             </Abstract>
             <PublicationTypeList>
@@ -143,6 +143,11 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
     assert "pod_signal" in signal_keys
     assert "pod_candidate" in signal_keys
     assert "exposure_signal" in signal_keys
+    assert "species_signal" in signal_keys
+    assert "duration_signal" in signal_keys
+    assert "evidence_quality" in signal_keys
+    assert "curation_readiness" in signal_keys
+    assert "inference_boundary" in signal_keys
     assert "toxicology_takeaway" in signal_keys
     assert "publication_type" in signal_keys
     assert workspace.pod_analysis.primary_candidate is not None

@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { appConfig } from "@/lib/config";
 import {
+  buildEvidenceQualityRows,
   buildPodCurationRows,
   buildWorkspaceOverviewRows,
   formatPublishedAt,
@@ -144,6 +145,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     const modeConfig = getSearchModeConfig(entityType as LiveWorkspaceResponse["entity_type"]);
     const overviewRows = buildWorkspaceOverviewRows(workspace);
     const podCurationRows = buildPodCurationRows(workspace);
+    const evidenceQualityRows = buildEvidenceQualityRows(workspace);
     const backToSearchHref = buildBackToSearchHref(entityType, activeQuery);
     const workspaceStateLabel = savedWorkspace ? "Saved reviewer snapshot" : "Live source workspace";
     const worksheetCandidate =
@@ -349,6 +351,40 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
 
           <div className="curation-grid">
             {podCurationRows.map((row) => (
+              <article key={row.label} className="curation-card">
+                <span className="overview-label">{row.label}</span>
+                <strong>{row.value}</strong>
+                <p className="curation-note">{row.note}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2>Evidence quality and traceability</h2>
+              <p className="empty-copy">
+                RebaTox separates source-backed findings from reviewer inference so a
+                stewardship user can judge whether this record is strong enough for
+                screening math, deeper full-text follow-up, or only contextual review.
+              </p>
+            </div>
+            <StatusBadge
+              tone={
+                evidenceQualityRows[0]?.value.includes("High")
+                  ? "success"
+                  : evidenceQualityRows[0]?.value.includes("Moderate")
+                    ? "warning"
+                    : "neutral"
+              }
+            >
+              {evidenceQualityRows[0]?.value ?? "Quality review"}
+            </StatusBadge>
+          </div>
+
+          <div className="curation-grid">
+            {evidenceQualityRows.map((row) => (
               <article key={row.label} className="curation-card">
                 <span className="overview-label">{row.label}</span>
                 <strong>{row.value}</strong>

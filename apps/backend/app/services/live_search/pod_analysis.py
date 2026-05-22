@@ -15,15 +15,15 @@ from app.schemas.live_search import (
 )
 
 DOSE_PATTERN = re.compile(
-    r"\b(?P<value>\d+(?:\.\d+)?)\s?(?P<unit>mg/kg/day|mg/kg|mg/day|mg/L|mg|ug/kg/day|ug/kg|µg/kg/day|µg/kg|ng/mL|ug/mL|µg/mL|uM|μM|nM|mM)\b",
+    r"\b(?P<value>\d+(?:\.\d+)?)\s?(?P<unit>mg/kg(?:\s?(?:bw|body weight))?(?:/day|/d)?|mg/kg-bw/day|mg/day|mg/d|mg/L|mg|ug/kg(?:\s?(?:bw|body weight))?(?:/day|/d)?|ug/kg-bw/day|µg/kg(?:\s?(?:bw|body weight))?(?:/day|/d)?|µg/kg-bw/day|ng/mL|ug/mL|µg/mL|uM|μM|nM|mM|ppm)\b",
     re.IGNORECASE,
 )
 POD_TERM_PATTERN = re.compile(
-    r"\b(?:NOAEL|LOAEL|NOEL|LOEL|BMDL|BMD|MTD|point of departure|POD)\b",
+    r"\b(?:NOAEL|LOAEL|NOEL|LOEL|NOAEC|LOAEC|NOEC|LOEC|BMDL|BMD|MTD|HNSTD|point of departure|POD)\b",
     re.IGNORECASE,
 )
 ROUTE_PATTERN = re.compile(
-    r"\b(oral|oral gavage|intravenous|i\.?v\.?|intraperitoneal|i\.?p\.?|subcutaneous|s\.?c\.?|inhalation|intratracheal|topical|dermal|intranasal|p\.?o\.?)\b",
+    r"\b(oral|oral gavage|gavage|intravenous|i\.?v\.?|intraperitoneal|i\.?p\.?|subcutaneous|s\.?c\.?|inhalation|intratracheal|topical|dermal|intranasal|p\.?o\.?|dietary|drinking water)\b",
     re.IGNORECASE,
 )
 DURATION_PATTERN = re.compile(
@@ -43,11 +43,16 @@ SPECIES_PATTERNS: dict[str, tuple[str, ...]] = {
 POD_PRIORITY: dict[str, int] = {
     "NOAEL": 7,
     "NOEL": 6,
+    "NOAEC": 6,
+    "NOEC": 5,
     "BMDL": 5,
     "BMD": 4,
     "LOAEL": 3,
     "LOEL": 2,
+    "LOAEC": 2,
+    "LOEC": 1,
     "MTD": 1,
+    "HNSTD": 1,
     "POD": 0,
 }
 
@@ -99,7 +104,7 @@ def _normalize_pod_term(value: str | None) -> str | None:
     if value is None:
         return None
     upper_value = value.upper()
-    if upper_value in {"NOAEL", "NOEL", "LOAEL", "LOEL", "BMD", "BMDL", "MTD", "POD"}:
+    if upper_value in {"NOAEL", "NOEL", "LOAEL", "LOEL", "NOAEC", "LOAEC", "NOEC", "LOEC", "BMD", "BMDL", "MTD", "HNSTD", "POD"}:
         return upper_value
     if upper_value == "POINT OF DEPARTURE":
         return "POD"
@@ -109,12 +114,18 @@ def _normalize_pod_term(value: str | None) -> str | None:
 def _normalize_unit(unit: str | None) -> str | None:
     if unit is None:
         return None
-    return (
+    normalized = (
         unit.casefold()
         .replace("μ", "µ")
         .replace("ug", "µg")
+        .replace("body weight", "bw")
+        .replace("-", "")
         .replace(" ", "")
     )
+    if normalized.endswith("/d"):
+        normalized = normalized[:-2] + "/day"
+    normalized = normalized.replace("kgbw", "kg")
+    return normalized
 
 
 def _normalize_mg_per_kg_day(
@@ -128,8 +139,12 @@ def _normalize_mg_per_kg_day(
     normalized_unit = _normalize_unit(unit)
     if normalized_unit == "mg/kg/day":
         return value, "Direct mg/kg/day basis from the source text."
+    if normalized_unit == "mg/kg":
+        return value, "Interpreted mg/kg as a dose-basis cue without an explicit day denominator."
     if normalized_unit == "µg/kg/day":
         return value / 1000.0, "Converted from µg/kg/day to mg/kg/day."
+    if normalized_unit == "µg/kg":
+        return value / 1000.0, "Converted from µg/kg to mg/kg as a dose-basis cue without an explicit day denominator."
     if normalized_unit == "mg/day":
         return value / 50.0, "Converted from mg/day to mg/kg/day using a 50 kg screening body weight."
 
@@ -146,7 +161,7 @@ def _confidence_for_candidate(
     normalized_mg_per_kg_day: float | None,
 ) -> str:
     normalized_unit = _normalize_unit(unit) or unit.lower()
-    if pod_term and normalized_mg_per_kg_day is not None and species and route:
+    if pod_term and normalized_mg_per_kg_day is not None and species and route and duration:
         return "high"
     if pod_term and normalized_mg_per_kg_day is not None:
         return "high"

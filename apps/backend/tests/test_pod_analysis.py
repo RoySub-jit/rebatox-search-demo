@@ -91,3 +91,35 @@ def test_build_pod_analysis_normalizes_human_mg_per_day_candidates() -> None:
         "did not include explicit POD language" in warning
         for warning in analysis.warnings
     )
+
+
+def test_build_pod_analysis_supports_bw_style_units_and_noaec_terms() -> None:
+    record = LiveSearchResult(
+        entity_type="degradant",
+        provider="pubmed",
+        external_id="pm-3",
+        title="Impurity inhalation note",
+    )
+    sections = [
+        LiveWorkspaceSection(
+            key="abstract",
+            title="Abstract",
+            content=[
+                "Wistar rats received inhalation exposure at a NOAEC of 25 mg/kg bw/day for 13 weeks in the subchronic study.",
+            ],
+        )
+    ]
+
+    analysis = build_pod_analysis(
+        record=record,
+        sections=sections,
+        extracted_signals=[],
+    )
+
+    assert analysis.primary_candidate is not None
+    assert analysis.primary_candidate.pod_term == "NOAEC"
+    assert analysis.primary_candidate.species == "rat"
+    assert analysis.primary_candidate.route == "inhalation"
+    assert analysis.primary_candidate.duration == "13 weeks"
+    assert analysis.primary_candidate.normalized_mg_per_kg_day == 25.0
+    assert analysis.primary_candidate.normalization_note == "Direct mg/kg/day basis from the source text."

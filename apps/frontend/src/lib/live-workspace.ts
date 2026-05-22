@@ -32,6 +32,12 @@ export type PodCurationRow = {
   note: string;
 };
 
+export type EvidenceQualityRow = {
+  label: string;
+  value: string;
+  note: string;
+};
+
 export const SEARCH_MODE_CONFIGS: SearchModeConfig[] = [
   {
     value: "molecule",
@@ -221,6 +227,20 @@ function getSignalValue(
   return null;
 }
 
+function getSignal(
+  workspace: LiveWorkspaceResponse,
+  ...keys: string[]
+) {
+  for (const key of keys) {
+    const signal = workspace.extracted_signals.find((item) => item.key === key);
+    if (signal) {
+      return signal;
+    }
+  }
+
+  return null;
+}
+
 export function buildPodCurationRows(
   workspace: LiveWorkspaceResponse,
 ): PodCurationRow[] {
@@ -285,6 +305,55 @@ export function buildPodCurationRows(
       label: "Curation takeaway",
       value: takeawayValue,
       note: "A reviewer-facing interpretation of how actionable the current source looks for POD curation.",
+    },
+  ];
+}
+
+export function buildEvidenceQualityRows(
+  workspace: LiveWorkspaceResponse,
+): EvidenceQualityRow[] {
+  const evidenceQualitySignal = getSignal(workspace, "evidence_quality");
+  const curationReadinessSignal = getSignal(workspace, "curation_readiness");
+  const inferenceBoundarySignal = getSignal(workspace, "inference_boundary");
+  const sourceBacking =
+    `${workspace.sections.length} structured section${workspace.sections.length === 1 ? "" : "s"} and ${workspace.extracted_signals.length} extracted cue${workspace.extracted_signals.length === 1 ? "" : "s"} from the current source.`;
+
+  return [
+    {
+      label: "Evidence quality",
+      value:
+        evidenceQualitySignal?.label ??
+        (workspace.pod_analysis.primary_candidate
+          ? "Moderate evidence quality"
+          : "Low evidence quality"),
+      note:
+        evidenceQualitySignal?.value ??
+        "How strong the current structured source looks for a first-pass toxicology review.",
+    },
+    {
+      label: "Curation readiness",
+      value:
+        curationReadinessSignal?.label ??
+        (workspace.pod_analysis.primary_candidate
+          ? "Requires confirmation before formal curation"
+          : "Contextual evidence only"),
+      note:
+        curationReadinessSignal?.value ??
+        "Whether this record is ready for worksheet-style screening or still needs deeper follow-up.",
+    },
+    {
+      label: "Source-backed support",
+      value: sourceBacking,
+      note: "A simple count of the structured source material and extracted cues available in this workspace.",
+    },
+    {
+      label: "Inference boundary",
+      value:
+        inferenceBoundarySignal?.label ??
+        "Inference boundary",
+      note:
+        inferenceBoundarySignal?.value ??
+        "Reviewer worksheet outputs and normalization steps are derived from the currently available structured source content and should still be confirmed against the underlying source record.",
     },
   ];
 }

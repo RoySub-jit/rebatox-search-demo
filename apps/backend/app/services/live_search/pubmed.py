@@ -5,7 +5,7 @@ import re
 import time
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -28,19 +28,31 @@ PUBMED_ESEARCH_ENDPOINT = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch
 PUBMED_ESUMMARY_ENDPOINT = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 PUBMED_EFETCH_ENDPOINT = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 ROUTE_PATTERN = re.compile(
-    r"\b(oral|intravenous|intraperitoneal|subcutaneous|inhalation|topical|dermal|intranasal)\b",
+    r"\b(oral|oral gavage|intravenous|intraperitoneal|subcutaneous|inhalation|intratracheal|topical|dermal|intranasal|dietary|drinking water|gavage)\b",
     re.IGNORECASE,
 )
 DOSE_PATTERN = re.compile(
-    r"\b\d+(?:\.\d+)?\s?(?:mg/kg(?:/day)?|mg/L|mg|ug/kg|µg/kg|ng/mL|ug/mL|µg/mL|uM|μM|nM|mM)\b",
+    r"\b\d+(?:\.\d+)?\s?(?:mg/kg(?:\s?(?:bw|body weight))?(?:/day|/d)?|mg/day|mg/d|mg/L|mg|ug/kg(?:\s?(?:bw|body weight))?(?:/day|/d)?|µg/kg(?:\s?(?:bw|body weight))?(?:/day|/d)?|ng/mL|ug/mL|µg/mL|uM|μM|nM|mM)\b",
     re.IGNORECASE,
 )
 POD_PATTERN = re.compile(
-    r"\b(?:NOAEL|LOAEL|POD|point of departure|benchmark dose|BMDL|BMD|MTD)\b",
+    r"\b(?:NOAEL|LOAEL|NOEL|LOEL|NOAEC|LOAEC|NOEC|LOEC|POD|point of departure|benchmark dose|BMDL|BMD|MTD|HNSTD)\b",
     re.IGNORECASE,
 )
 EXPOSURE_PATTERN = re.compile(
     r"\b(?:AUC|Cmax|exposure|systemic exposure|plasma concentration|clearance|half-life)\b",
+    re.IGNORECASE,
+)
+SPECIES_PATTERN = re.compile(
+    r"\b(?:rat|rats|mouse|mice|murine|rabbit|rabbits|dog|dogs|canine|beagle|monkey|monkeys|macaque|cynomolgus|primate|human|humans|healthy volunteers?|patients?|sprague-dawley|wistar|c57bl/6|balb/c)\b",
+    re.IGNORECASE,
+)
+DURATION_PATTERN = re.compile(
+    r"\b(?:for\s+)?\d+(?:\.\d+)?\s?(?:hours?|days?|weeks?|months?|years?)\b",
+    re.IGNORECASE,
+)
+ENDPOINT_PATTERN = re.compile(
+    r"\b(?:hepatotoxicity|cardiotoxicity|neurotoxicity|genotoxicity|carcinogenicity|reproductive toxicity|developmental toxicity|renal toxicity|liver toxicity|kidney toxicity|tumou?r|cytotoxicity|endocrine disruption|mutagenicity)\b",
     re.IGNORECASE,
 )
 PUBMED_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
@@ -127,20 +139,25 @@ def _build_pubmed_search_expression(entity_type: EntityType, query: str) -> str:
             "(toxicity[Title/Abstract] OR toxicology[Title/Abstract] OR dose[Title/Abstract] "
             "OR dosing[Title/Abstract] OR exposure[Title/Abstract] OR pharmacokinetic*[Title/Abstract] "
             'OR safety[Title/Abstract] OR noael[Title/Abstract] OR loael[Title/Abstract] '
-            'OR "point of departure"[Title/Abstract])'
+            'OR noaec[Title/Abstract] OR loaec[Title/Abstract] OR "point of departure"[Title/Abstract] '
+            'OR benchmark dose[Title/Abstract])'
         )
 
     if entity_type == "degradant":
         return (
             f"({quoted}[Title/Abstract]) AND "
             "(degradant[Title/Abstract] OR degradation[Title/Abstract] "
-            "OR impurity[Title/Abstract] OR breakdown[Title/Abstract])"
+            "OR impurity[Title/Abstract] OR breakdown[Title/Abstract]) AND "
+            "(toxicity[Title/Abstract] OR toxicology[Title/Abstract] OR dose[Title/Abstract] "
+            'OR exposure[Title/Abstract] OR noael[Title/Abstract] OR loael[Title/Abstract] OR risk[Title/Abstract])'
         )
 
     return (
         f"({quoted}[Title/Abstract]) AND "
         '("extractables and leachables"[Title/Abstract] OR extractable[Title/Abstract] '
-        'OR leachable[Title/Abstract] OR migrant[Title/Abstract] OR packaging[Title/Abstract])'
+        'OR leachable[Title/Abstract] OR migrant[Title/Abstract] OR packaging[Title/Abstract]) AND '
+        "(toxicity[Title/Abstract] OR toxicology[Title/Abstract] OR exposure[Title/Abstract] "
+        'OR safety[Title/Abstract] OR risk[Title/Abstract] OR dose[Title/Abstract])'
     )
 
 
@@ -357,6 +374,64 @@ def _build_pod_candidate_summary(sentence: str) -> str | None:
     return f"{pod_term} referenced in abstract"
 
 
+def _first_match_text(pattern: re.Pattern[str], text: str) -> str | None:
+    match = pattern.search(text)
+    if match is None:
+        return None
+    return " ".join(match.group(0).split())
+
+
+def _build_evidence_quality_signal(
+    *,
+    has_pod_sentence: bool,
+    has_dose_sentence: bool,
+    has_route: bool,
+    has_species: bool,
+    has_duration: bool,
+    study_model: str | None,
+) -> tuple[str, str, Literal["high", "medium", "low"]]:
+    if has_pod_sentence and has_dose_sentence and (has_species or study_model is not None):
+        return (
+            "High evidence quality",
+            "The abstract contains explicit POD language, dose context, and enough study detail to support a meaningful first-pass toxicology curation review.",
+            "high",
+        )
+    if (has_pod_sentence and has_dose_sentence) or (has_dose_sentence and has_route and study_model is not None):
+        return (
+            "Moderate evidence quality",
+            "The abstract contains structured dose or POD cues, but still needs fuller confirmation before it should anchor a final curated POD decision.",
+            "medium",
+        )
+    return (
+        "Low evidence quality",
+        "This record provides useful scientific context, but the abstract alone does not yet expose enough structured toxicology detail for confident POD curation.",
+        "low",
+    )
+
+
+def _build_curation_readiness_signal(
+    *,
+    has_pod_sentence: bool,
+    has_dose_sentence: bool,
+    has_species: bool,
+    has_duration: bool,
+) -> tuple[str, str]:
+    if has_pod_sentence and has_dose_sentence and has_species:
+        return (
+            "Ready for screening worksheet use",
+            "This source has enough explicit dose and POD structure to justify a screening worksheet pass, although formal stewardship review may still require full-text confirmation.",
+        )
+    if has_dose_sentence or has_pod_sentence:
+        return (
+            "Requires confirmation before formal curation",
+            "The source exposes at least one actionable toxicology cue, but it should still be treated as an intermediate evidence input rather than a final POD anchor.",
+        )
+    return (
+        "Contextual evidence only",
+        "Use this source mainly for background scientific context, not as the primary basis for a curated POD without stronger follow-up support.",
+    )
+
+
 def _build_pubmed_signals(
     *,
     entity_type: EntityType,
@@ -415,6 +490,30 @@ def _build_pubmed_signals(
             )
         )
 
+    species_signal = _first_match_text(SPECIES_PATTERN, abstract_text)
+    if species_signal:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="species_signal",
+                label="Species / population",
+                value=species_signal,
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    duration_signal = _first_match_text(DURATION_PATTERN, abstract_text)
+    if duration_signal:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="duration_signal",
+                label="Study duration",
+                value=duration_signal,
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
     dose_mentions = list(dict.fromkeys(match.group(0) for match in DOSE_PATTERN.finditer(abstract_text)))
     if dose_mentions:
         signals.append(
@@ -422,6 +521,17 @@ def _build_pubmed_signals(
                 key="dose_or_exposure_context",
                 label="Dose / exposure context",
                 value="; ".join(dose_mentions[:4]),
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
+
+    if dose_mentions:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="dose_regimen_summary",
+                label="Dose regimen summary",
+                value="; ".join(dose_mentions[:3]),
                 source_section_key="abstract",
                 confidence="medium",
             )
@@ -465,8 +575,20 @@ def _build_pubmed_signals(
                     value=pod_candidate,
                     source_section_key="abstract",
                     confidence="high" if DOSE_PATTERN.search(pod_sentence) else "medium",
-                )
             )
+        )
+
+    endpoint_signal = _first_match_text(ENDPOINT_PATTERN, abstract_text)
+    if endpoint_signal:
+        signals.append(
+            LiveWorkspaceExtractedSignal(
+                key="endpoint_signal",
+                label="Toxicology endpoint cue",
+                value=endpoint_signal,
+                source_section_key="abstract",
+                confidence="medium",
+            )
+        )
 
     exposure_sentence = next(
         (sentence for sentence in abstract_sentences if EXPOSURE_PATTERN.search(sentence)),
@@ -482,6 +604,52 @@ def _build_pubmed_signals(
                 confidence="medium",
             )
         )
+
+    evidence_quality_label, evidence_quality_value, evidence_quality_confidence = _build_evidence_quality_signal(
+        has_pod_sentence=pod_sentence is not None,
+        has_dose_sentence=dose_sentence is not None,
+        has_route=bool(route_mentions),
+        has_species=species_signal is not None,
+        has_duration=duration_signal is not None,
+        study_model=study_model,
+    )
+    signals.append(
+        LiveWorkspaceExtractedSignal(
+            key="evidence_quality",
+            label=evidence_quality_label,
+            value=evidence_quality_value,
+            source_section_key="abstract",
+            confidence=evidence_quality_confidence,
+        )
+    )
+
+    curation_readiness_label, curation_readiness_value = _build_curation_readiness_signal(
+        has_pod_sentence=pod_sentence is not None,
+        has_dose_sentence=dose_sentence is not None,
+        has_species=species_signal is not None,
+        has_duration=duration_signal is not None,
+    )
+    signals.append(
+        LiveWorkspaceExtractedSignal(
+            key="curation_readiness",
+            label=curation_readiness_label,
+            value=curation_readiness_value,
+            source_section_key="abstract",
+            confidence="medium" if dose_sentence or pod_sentence else "low",
+        )
+    )
+
+    signals.append(
+        LiveWorkspaceExtractedSignal(
+            key="inference_boundary",
+            label="Inference boundary",
+            value=(
+                "These extracted cues are derived from the structured PubMed abstract and metadata only. Full-text or source-document review is still recommended before using the record as a final curated POD basis."
+            ),
+            source_section_key="abstract",
+            confidence="high",
+        )
+    )
 
     if pod_sentence and dose_sentence:
         signals.append(

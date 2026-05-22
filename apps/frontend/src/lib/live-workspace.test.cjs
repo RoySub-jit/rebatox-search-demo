@@ -2,6 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  buildEvidenceQualityRows,
   buildPodCurationRows,
   buildWorkspaceOverviewRows,
   formatPublishedAt,
@@ -161,6 +162,28 @@ test("live-workspace helpers build overview rows for molecule and literature mod
       keywords: [],
     },
     sections: [],
+    pod_analysis: {
+      primary_candidate: null,
+      candidates: [],
+      derived_calculations: [],
+      warnings: [],
+    },
+    pod_worksheet: {
+      selected_candidate_index: null,
+      body_weight_kg: 50,
+      uncertainty_factor: 100,
+      use_human_equivalent_dose: false,
+      reviewer_status: "draft",
+      reviewer_notes: null,
+      selected_candidate: null,
+      selected_basis_label: null,
+      selected_basis_mg_per_kg_day: null,
+      hed_basis_mg_per_kg_day: null,
+      screening_intake_mg_day: null,
+      uf_adjusted_intake_mg_day: null,
+      calculations: [],
+      warnings: [],
+    },
     review_cue: {
       title: "Label-backed stewardship review",
       description: "Review the live label record.",
@@ -194,6 +217,28 @@ test("live-workspace helpers build overview rows for molecule and literature mod
       keywords: ["ndma"],
     },
     sections: [],
+    pod_analysis: {
+      primary_candidate: null,
+      candidates: [],
+      derived_calculations: [],
+      warnings: [],
+    },
+    pod_worksheet: {
+      selected_candidate_index: null,
+      body_weight_kg: 50,
+      uncertainty_factor: 100,
+      use_human_equivalent_dose: false,
+      reviewer_status: "draft",
+      reviewer_notes: null,
+      selected_candidate: null,
+      selected_basis_label: null,
+      selected_basis_mg_per_kg_day: null,
+      hed_basis_mg_per_kg_day: null,
+      screening_intake_mg_day: null,
+      uf_adjusted_intake_mg_day: null,
+      calculations: [],
+      warnings: [],
+    },
     review_cue: {
       title: "Literature-backed evidence review",
       description: "Review the live article.",
@@ -242,6 +287,22 @@ test("live-workspace helpers build a POD curation snapshot from extracted signal
       derived_calculations: [],
       warnings: [],
     },
+    pod_worksheet: {
+      selected_candidate_index: null,
+      body_weight_kg: 50,
+      uncertainty_factor: 100,
+      use_human_equivalent_dose: false,
+      reviewer_status: "draft",
+      reviewer_notes: null,
+      selected_candidate: null,
+      selected_basis_label: null,
+      selected_basis_mg_per_kg_day: null,
+      hed_basis_mg_per_kg_day: null,
+      screening_intake_mg_day: null,
+      uf_adjusted_intake_mg_day: null,
+      calculations: [],
+      warnings: [],
+    },
     extracted_signals: [
       {
         key: "pod_candidate",
@@ -285,4 +346,93 @@ test("live-workspace helpers build a POD curation snapshot from extracted signal
   assert.equal(rows[3].label, "Route context");
   assert.equal(rows[3].value, "ORAL");
   assert.equal(rows[5].label, "Curation takeaway");
+});
+
+test("live-workspace helpers build evidence quality rows for reviewer framing", () => {
+  const rows = buildEvidenceQualityRows({
+    entity_type: "degradant",
+    query: "ndma",
+    record: {
+      entity_type: "degradant",
+      provider: "pubmed",
+      external_id: "12345",
+      title: "NDMA Risk Review",
+      subtitle: "Journal of Safety",
+      summary: "Lead author: Doe J",
+      document_type: "journal_article",
+      published_at: "2025-06-01",
+      source_uri: "https://pubmed.ncbi.nlm.nih.gov/12345/",
+      identifiers: [],
+      generic_name: null,
+      brand_names: [],
+      manufacturer_names: [],
+      routes: [],
+      substance_names: [],
+      product_type: null,
+      authors: ["Doe J"],
+      journal: "Journal of Safety",
+      keywords: ["ndma"],
+    },
+    sections: [{ key: "abstract", title: "Abstract", content: ["A sentence"] }],
+    pod_analysis: {
+      primary_candidate: null,
+      candidates: [],
+      derived_calculations: [],
+      warnings: [],
+    },
+    pod_worksheet: {
+      selected_candidate_index: null,
+      body_weight_kg: 50,
+      uncertainty_factor: 100,
+      use_human_equivalent_dose: false,
+      reviewer_status: "draft",
+      reviewer_notes: null,
+      selected_candidate: null,
+      selected_basis_label: null,
+      selected_basis_mg_per_kg_day: null,
+      hed_basis_mg_per_kg_day: null,
+      screening_intake_mg_day: null,
+      uf_adjusted_intake_mg_day: null,
+      calculations: [],
+      warnings: [],
+    },
+    extracted_signals: [
+      {
+        key: "evidence_quality",
+        label: "Moderate evidence quality",
+        value: "The abstract contains structured dose or POD cues.",
+        source_section_key: "abstract",
+        confidence: "medium",
+      },
+      {
+        key: "curation_readiness",
+        label: "Requires confirmation before formal curation",
+        value: "The source exposes at least one actionable toxicology cue.",
+        source_section_key: "abstract",
+        confidence: "medium",
+      },
+      {
+        key: "inference_boundary",
+        label: "Inference boundary",
+        value: "Abstract-derived only.",
+        source_section_key: "abstract",
+        confidence: "high",
+      },
+    ],
+    review_cue: {
+      title: "Literature-backed evidence review",
+      description: "Review the live article.",
+    },
+    retrieval_mode: "live",
+    retrieved_at: "2026-05-08T12:00:00Z",
+  });
+
+  assert.equal(rows[0].label, "Evidence quality");
+  assert.equal(rows[0].value, "Moderate evidence quality");
+  assert.match(rows[0].note, /structured dose or POD cues/i);
+  assert.equal(rows[1].label, "Curation readiness");
+  assert.equal(rows[1].value, "Requires confirmation before formal curation");
+  assert.match(rows[2].value, /1 structured section/i);
+  assert.equal(rows[3].label, "Inference boundary");
+  assert.equal(rows[3].value, "Inference boundary");
 });
