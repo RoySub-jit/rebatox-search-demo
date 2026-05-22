@@ -140,6 +140,8 @@ export type LiveWorkspaceDoseCandidateResponse = {
   dose_text: string;
   dose_value: number | null;
   unit: string | null;
+  normalized_mg_per_kg_day: number | null;
+  normalization_note: string | null;
   pod_term: string | null;
   species: string | null;
   route: string | null;

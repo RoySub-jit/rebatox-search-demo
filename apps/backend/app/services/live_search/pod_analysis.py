@@ -21,21 +21,21 @@ POD_TERM_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ROUTE_PATTERN = re.compile(
-    r"\b(oral|intravenous|intraperitoneal|subcutaneous|inhalation|topical|dermal|intranasal)\b",
+    r"\b(oral|oral gavage|intravenous|i\.?v\.?|intraperitoneal|i\.?p\.?|subcutaneous|s\.?c\.?|inhalation|intratracheal|topical|dermal|intranasal|p\.?o\.?)\b",
     re.IGNORECASE,
 )
 DURATION_PATTERN = re.compile(
-    r"\b(?:for\s+)?(\d+(?:\.\d+)?)\s?(day|days|week|weeks|month|months|year|years)\b",
+    r"\b(?:for\s+)?(\d+(?:\.\d+)?)\s?(?:-|)?\s?(day|days|week|weeks|month|months|year|years)\b",
     re.IGNORECASE,
 )
 
 SPECIES_PATTERNS: dict[str, tuple[str, ...]] = {
-    "mouse": (" mouse ", " mice ", " murine "),
-    "rat": (" rat ", " rats ", " rodent "),
+    "mouse": (" mouse ", " mice ", " murine ", " c57bl/6 ", " balb/c "),
+    "rat": (" rat ", " rats ", " rodent ", " sprague-dawley ", " wistar "),
     "rabbit": (" rabbit ", " rabbits "),
-    "dog": (" dog ", " dogs ", " canine "),
-    "monkey": (" monkey ", " monkeys ", " macaque ", " primate "),
-    "human": (" human ", " humans ", " patient ", " patients ", " healthy volunteer "),
+    "dog": (" dog ", " dogs ", " canine ", " beagle "),
+    "monkey": (" monkey ", " monkeys ", " macaque ", " primate ", " cynomolgus "),
+    "human": (" human ", " humans ", " patient ", " patients ", " healthy volunteer ", " healthy volunteers "),
 }
 
 POD_PRIORITY: dict[str, int] = {
@@ -74,7 +74,16 @@ def _detect_species(sentence: str) -> str | None:
 
 def _detect_route(sentence: str) -> str | None:
     match = ROUTE_PATTERN.search(sentence)
-    return match.group(1).lower() if match else None
+    if match is None:
+        return None
+
+    value = match.group(1).casefold().replace(".", "")
+    return {
+        "iv": "intravenous",
+        "ip": "intraperitoneal",
+        "sc": "subcutaneous",
+        "po": "oral",
+    }.get(value, value)
 
 
 def _detect_duration(sentence: str) -> str | None:
@@ -95,20 +104,74 @@ def _normalize_pod_term(value: str | None) -> str | None:
     return value.title()
 
 
-def _confidence_for_candidate(*, pod_term: str | None, unit: str, species: str | None) -> str:
-    normalized_unit = unit.lower()
-    if pod_term and normalized_unit == "mg/kg/day":
+def _normalize_unit(unit: str | None) -> str | None:
+    if unit is None:
+        return None
+    return (
+        unit.casefold()
+        .replace("μ", "µ")
+        .replace("ug", "µg")
+        .replace(" ", "")
+    )
+
+
+def _normalize_mg_per_kg_day(
+    *,
+    value: float | None,
+    unit: str | None,
+) -> tuple[float | None, str | None]:
+    if value is None or unit is None:
+        return None, None
+
+    normalized_unit = _normalize_unit(unit)
+    if normalized_unit == "mg/kg/day":
+        return value, "Direct mg/kg/day basis from the source text."
+    if normalized_unit == "µg/kg/day":
+        return value / 1000.0, "Converted from µg/kg/day to mg/kg/day."
+    if normalized_unit == "mg/day":
+        return value / 50.0, "Converted from mg/day to mg/kg/day using a 50 kg screening body weight."
+
+    return None, None
+
+
+def _confidence_for_candidate(
+    *,
+    pod_term: str | None,
+    unit: str,
+    species: str | None,
+    route: str | None,
+    duration: str | None,
+    normalized_mg_per_kg_day: float | None,
+) -> str:
+    normalized_unit = _normalize_unit(unit) or unit.lower()
+    if pod_term and normalized_mg_per_kg_day is not None and species and route:
         return "high"
-    if pod_term or species or normalized_unit in {"mg/kg/day", "mg/day"}:
+    if pod_term and normalized_mg_per_kg_day is not None:
+        return "high"
+    if pod_term or species or route or duration or normalized_unit in {"mg/kg/day", "mg/day", "µg/kg/day"}:
         return "medium"
     return "low"
 
 
 def _candidate_sort_key(candidate: LiveWorkspaceDoseCandidate) -> tuple[int, int, float]:
     priority = POD_PRIORITY.get(candidate.pod_term or "", -1)
-    unit_score = 2 if (candidate.unit or "").lower() == "mg/kg/day" else 1 if (candidate.unit or "").lower() == "mg/kg" else 0
+    normalized_unit = _normalize_unit(candidate.unit)
+    unit_score = (
+        3
+        if candidate.normalized_mg_per_kg_day is not None
+        else 2
+        if normalized_unit == "mg/kg/day"
+        else 1
+        if normalized_unit == "mg/kg"
+        else 0
+    )
     confidence_score = {"high": 2.0, "medium": 1.0, "low": 0.0}[candidate.confidence]
-    return (priority, unit_score, confidence_score)
+    richness_score = (
+        (1.0 if candidate.species else 0.0)
+        + (1.0 if candidate.route else 0.0)
+        + (0.5 if candidate.duration else 0.0)
+    )
+    return (priority, unit_score, confidence_score + richness_score)
 
 
 def _iter_candidate_sentences(
@@ -156,6 +219,10 @@ def _build_candidates(
             dose_text = match.group(0)
             unit = match.group("unit")
             value = float(match.group("value"))
+            normalized_mg_per_kg_day, normalization_note = _normalize_mg_per_kg_day(
+                value=value,
+                unit=unit,
+            )
             key = (dose_text, sentence, pod_term)
             if key in seen:
                 continue
@@ -166,6 +233,8 @@ def _build_candidates(
                     dose_text=dose_text,
                     dose_value=value,
                     unit=unit,
+                    normalized_mg_per_kg_day=normalized_mg_per_kg_day,
+                    normalization_note=normalization_note,
                     pod_term=pod_term,
                     species=species,
                     route=route,
@@ -175,6 +244,9 @@ def _build_candidates(
                         pod_term=pod_term,
                         unit=unit,
                         species=species,
+                        route=route,
+                        duration=duration,
+                        normalized_mg_per_kg_day=normalized_mg_per_kg_day,
                     ),
                 )
             )
@@ -191,16 +263,27 @@ def _build_derived_calculations(
 
     calculations: list[LiveWorkspaceDerivedCalculation] = []
     warnings: list[str] = []
-    unit = primary_candidate.unit.lower()
-
-    if unit != "mg/kg/day":
+    normalized_basis = primary_candidate.normalized_mg_per_kg_day
+    if normalized_basis is None:
         warnings.append(
-            "Derived screening calculations currently require an mg/kg/day basis. "
+            "Derived screening calculations currently require a normalized mg/kg/day basis. "
             f"The selected candidate was reported as {primary_candidate.unit}."
         )
         return calculations, warnings
 
-    screening_mg_day = primary_candidate.dose_value * 50.0
+    if primary_candidate.normalization_note:
+        calculations.append(
+            LiveWorkspaceDerivedCalculation(
+                key="normalized_basis",
+                label="Normalized screening basis",
+                formula="Normalized basis = reported dose converted to mg/kg/day when needed",
+                result_text=f"{normalized_basis:.3g} mg/kg/day",
+                unit="mg/kg/day",
+                assumptions=[primary_candidate.normalization_note],
+            )
+        )
+
+    screening_mg_day = normalized_basis * 50.0
     calculations.append(
         LiveWorkspaceDerivedCalculation(
             key="screening_mg_day_50kg",
@@ -217,7 +300,7 @@ def _build_derived_calculations(
 
     if primary_candidate.species and primary_candidate.species in KM_FACTORS and primary_candidate.species != "human":
         animal_km = KM_FACTORS[primary_candidate.species]
-        hed_value = primary_candidate.dose_value * (animal_km / HUMAN_KM_FACTOR)
+        hed_value = normalized_basis * (animal_km / HUMAN_KM_FACTOR)
         calculations.append(
             LiveWorkspaceDerivedCalculation(
                 key="screening_hed_mg_per_kg_day",
@@ -245,6 +328,22 @@ def _build_derived_calculations(
             )
         )
 
+    adjusted_screening_intake = screening_mg_day / 100.0
+    calculations.append(
+        LiveWorkspaceDerivedCalculation(
+            key="illustrative_uf100_screen",
+            label="Illustrative UF100 screening intake",
+            formula="screening intake (mg/day) = normalized basis × 50 kg / 100",
+            result_text=f"{adjusted_screening_intake:.3g} mg/day",
+            unit="mg/day",
+            assumptions=[
+                "Uses the normalized mg/kg/day basis and a 50 kg adult screening body weight.",
+                "Applies a composite uncertainty factor of 100 as a rough curation screen only.",
+                "This is not a formal PDE/ADE or health-based exposure limit.",
+            ],
+        )
+    )
+
     return calculations, warnings
 
 
@@ -270,6 +369,10 @@ def build_pod_analysis(
     elif primary_candidate.pod_term is None:
         warnings.append(
             "The leading dose candidate did not include explicit POD language, so it should be treated as contextual rather than definitive."
+        )
+    elif primary_candidate.normalized_mg_per_kg_day is None:
+        warnings.append(
+            "The leading candidate could not be normalized to an mg/kg/day basis, so any worksheet math remains limited."
         )
 
     if record.provider == "pubmed":

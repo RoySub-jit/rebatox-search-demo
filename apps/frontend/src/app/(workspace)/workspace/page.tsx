@@ -381,6 +381,15 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
                     <strong>{workspace.pod_analysis.primary_candidate.dose_text}</strong>
                   </div>
                   <div className="descriptor-row">
+                    <span className="overview-label">Normalized basis</span>
+                    <strong>
+                      {workspace.pod_analysis.primary_candidate.normalized_mg_per_kg_day !==
+                      null
+                        ? `${workspace.pod_analysis.primary_candidate.normalized_mg_per_kg_day.toPrecision(3)} mg/kg/day`
+                        : "Not normalized"}
+                    </strong>
+                  </div>
+                  <div className="descriptor-row">
                     <span className="overview-label">POD basis</span>
                     <strong>
                       {workspace.pod_analysis.primary_candidate.pod_term ??
@@ -404,7 +413,16 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
                         : ""}
                     </strong>
                   </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Candidate confidence</span>
+                    <strong>{workspace.pod_analysis.primary_candidate.confidence}</strong>
+                  </div>
                 </div>
+                {workspace.pod_analysis.primary_candidate.normalization_note ? (
+                  <p className="empty-copy">
+                    {workspace.pod_analysis.primary_candidate.normalization_note}
+                  </p>
+                ) : null}
               </article>
             </div>
           ) : (
@@ -436,6 +454,39 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
                   ) : null}
                 </article>
               ))}
+            </div>
+          ) : null}
+
+          {workspace.pod_analysis.candidates.length > 1 ? (
+            <div className="study-card-stack">
+              <article className="study-card">
+                <div className="study-card-copy">
+                  <h3>Other ranked candidates</h3>
+                  <p>
+                    RebaTox ranked additional dose-bearing candidates below the primary
+                    selection so a reviewer can compare alternate POD cues before making a
+                    final judgment.
+                  </p>
+                </div>
+                <div className="descriptor-list">
+                  {workspace.pod_analysis.candidates.slice(1).map((candidate, index) => (
+                    <div
+                      key={`${candidate.dose_text}-${candidate.sentence}-${index}`}
+                      className="descriptor-row"
+                    >
+                      <span className="overview-label">
+                        {candidate.pod_term ?? "Contextual dose cue"}
+                      </span>
+                      <strong>
+                        {candidate.dose_text}
+                        {candidate.normalized_mg_per_kg_day !== null
+                          ? ` · ${candidate.normalized_mg_per_kg_day.toPrecision(3)} mg/kg/day`
+                          : ""}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              </article>
             </div>
           ) : null}
 

@@ -65,6 +65,8 @@ class LiveWorkspaceDoseCandidate(BaseModel):
     dose_text: str
     dose_value: float | None = None
     unit: str | None = None
+    normalized_mg_per_kg_day: float | None = None
+    normalization_note: str | None = None
     pod_term: str | None = None
     species: str | None = None
     route: str | None = None

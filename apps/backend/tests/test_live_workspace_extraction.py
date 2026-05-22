@@ -147,7 +147,15 @@ def test_resolve_pubmed_workspace_extracts_literature_signals(monkeypatch) -> No
     assert "publication_type" in signal_keys
     assert workspace.pod_analysis.primary_candidate is not None
     assert workspace.pod_analysis.primary_candidate.pod_term == "NOAEL"
-    assert workspace.pod_analysis.derived_calculations[0].label == "50 kg screening conversion"
+    assert workspace.pod_analysis.primary_candidate.normalized_mg_per_kg_day == 50.0
+    assert any(
+        item.label == "50 kg screening conversion"
+        for item in workspace.pod_analysis.derived_calculations
+    )
+    assert any(
+        item.label == "Illustrative UF100 screening intake"
+        for item in workspace.pod_analysis.derived_calculations
+    )
 
 
 def test_resolve_pubchem_workspace_extracts_identity_and_hazard_signals(monkeypatch) -> None:

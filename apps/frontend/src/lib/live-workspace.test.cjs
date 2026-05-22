@@ -236,6 +236,12 @@ test("live-workspace helpers build a POD curation snapshot from extracted signal
       keywords: ["aspirin"],
     },
     sections: [],
+    pod_analysis: {
+      primary_candidate: null,
+      candidates: [],
+      derived_calculations: [],
+      warnings: [],
+    },
     extracted_signals: [
       {
         key: "pod_candidate",

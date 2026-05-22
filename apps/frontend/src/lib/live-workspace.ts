@@ -224,22 +224,36 @@ function getSignalValue(
 export function buildPodCurationRows(
   workspace: LiveWorkspaceResponse,
 ): PodCurationRow[] {
+  const primaryCandidate = workspace.pod_analysis.primary_candidate;
   const routeValue =
+    primaryCandidate?.route ??
     getSignalValue(workspace, "route_mentions", "route") ??
     (workspace.record.routes.length > 0 ? workspace.record.routes.join(", ") : "Not detected");
   const doseValue =
-    getSignalValue(workspace, "pod_candidate", "dose_or_exposure_context", "dose_sentence") ??
-    "No explicit dose cue detected";
+    primaryCandidate
+      ? `${primaryCandidate.dose_text}${
+          primaryCandidate.normalized_mg_per_kg_day !== null
+            ? ` (normalized ${primaryCandidate.normalized_mg_per_kg_day.toPrecision(3)} mg/kg/day)`
+            : ""
+        }`
+      : (getSignalValue(workspace, "pod_candidate", "dose_or_exposure_context", "dose_sentence") ??
+        "No explicit dose cue detected");
   const podValue =
-    getSignalValue(workspace, "pod_candidate", "pod_signal") ??
-    "No explicit POD candidate detected";
+    primaryCandidate
+      ? `${primaryCandidate.pod_term ?? "Contextual dose cue"} at ${primaryCandidate.dose_text}`
+      : (getSignalValue(workspace, "pod_candidate", "pod_signal") ??
+        "No explicit POD candidate detected");
   const exposureValue =
     getSignalValue(workspace, "exposure_signal") ?? "No explicit exposure cue detected";
   const studyModelValue =
-    getSignalValue(workspace, "study_model") ?? "Study model not inferred";
+    primaryCandidate?.species
+      ? `${primaryCandidate.species}${primaryCandidate.duration ? ` · ${primaryCandidate.duration}` : ""}`
+      : getSignalValue(workspace, "study_model") ?? "Study model not inferred";
   const takeawayValue =
-    getSignalValue(workspace, "toxicology_takeaway") ??
-    "Structured toxicology takeaway not inferred from the current source.";
+    primaryCandidate && primaryCandidate.normalized_mg_per_kg_day !== null
+      ? `Primary candidate normalized to ${primaryCandidate.normalized_mg_per_kg_day.toPrecision(3)} mg/kg/day for screening math.`
+      : (getSignalValue(workspace, "toxicology_takeaway") ??
+        "Structured toxicology takeaway not inferred from the current source.");
 
   return [
     {
