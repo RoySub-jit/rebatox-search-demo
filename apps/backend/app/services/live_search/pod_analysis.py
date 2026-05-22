@@ -9,6 +9,8 @@ from app.schemas.live_search import (
     LiveWorkspaceDoseCandidate,
     LiveWorkspaceExtractedSignal,
     LiveWorkspacePodAnalysis,
+    LiveWorkspacePodWorksheet,
+    LiveWorkspaceResponse,
     LiveWorkspaceSection,
 )
 
@@ -345,6 +347,196 @@ def _build_derived_calculations(
     )
 
     return calculations, warnings
+
+
+def _clamp_selected_candidate_index(
+    requested_index: int | None,
+    candidate_count: int,
+) -> int | None:
+    if candidate_count <= 0:
+        return None
+    if requested_index is None:
+        return 0
+    return max(0, min(requested_index, candidate_count - 1))
+
+
+def _worksheet_basis_for_candidate(
+    *,
+    candidate: LiveWorkspaceDoseCandidate | None,
+    use_human_equivalent_dose: bool,
+) -> tuple[float | None, float | None, str | None, list[str]]:
+    warnings: list[str] = []
+    if candidate is None:
+        return None, None, None, ["No candidate is currently selected for the POD worksheet."]
+
+    normalized_basis = candidate.normalized_mg_per_kg_day
+    if normalized_basis is None:
+        return (
+            None,
+            None,
+            None,
+            [
+                "The selected candidate does not expose a normalized mg/kg/day basis, so worksheet screening math cannot be completed yet."
+            ],
+        )
+
+    if (
+        use_human_equivalent_dose
+        and candidate.species
+        and candidate.species in KM_FACTORS
+        and candidate.species != "human"
+    ):
+        animal_km = KM_FACTORS[candidate.species]
+        hed_value = normalized_basis * (animal_km / HUMAN_KM_FACTOR)
+        return (
+            hed_value,
+            hed_value,
+            f"HED-adjusted screening basis from {candidate.species}",
+            warnings,
+        )
+
+    if use_human_equivalent_dose:
+        warnings.append(
+            "Human equivalent dose conversion was requested, but the selected candidate did not expose a supported non-human species for Km-based screening."
+        )
+
+    return normalized_basis, None, "Normalized source basis", warnings
+
+
+def build_pod_worksheet(
+    *,
+    pod_analysis: LiveWorkspacePodAnalysis,
+    current_worksheet: LiveWorkspacePodWorksheet | None = None,
+) -> LiveWorkspacePodWorksheet:
+    candidates = pod_analysis.candidates
+    selected_candidate_index = _clamp_selected_candidate_index(
+        current_worksheet.selected_candidate_index if current_worksheet else None,
+        len(candidates),
+    )
+    selected_candidate = (
+        candidates[selected_candidate_index]
+        if selected_candidate_index is not None and selected_candidate_index < len(candidates)
+        else None
+    )
+    body_weight_kg = (
+        current_worksheet.body_weight_kg if current_worksheet else 50.0
+    )
+    uncertainty_factor = (
+        current_worksheet.uncertainty_factor if current_worksheet else 100.0
+    )
+    use_human_equivalent_dose = (
+        current_worksheet.use_human_equivalent_dose if current_worksheet else False
+    )
+    reviewer_status = (
+        current_worksheet.reviewer_status if current_worksheet else "draft"
+    )
+    reviewer_notes = (
+        current_worksheet.reviewer_notes.strip()
+        if current_worksheet and current_worksheet.reviewer_notes
+        else None
+    )
+
+    selected_basis_mg_per_kg_day, hed_basis_mg_per_kg_day, selected_basis_label, warnings = (
+        _worksheet_basis_for_candidate(
+            candidate=selected_candidate,
+            use_human_equivalent_dose=use_human_equivalent_dose,
+        )
+    )
+
+    calculations: list[LiveWorkspaceDerivedCalculation] = []
+    screening_intake_mg_day: float | None = None
+    uf_adjusted_intake_mg_day: float | None = None
+
+    if selected_candidate is not None:
+        calculations.append(
+            LiveWorkspaceDerivedCalculation(
+                key="worksheet_selected_candidate",
+                label="Selected POD candidate",
+                formula="Selected candidate = reviewer-chosen dose-bearing POD cue",
+                result_text=f"{selected_candidate.pod_term or 'Dose cue'} at {selected_candidate.dose_text}",
+                assumptions=[
+                    "The reviewer can switch to another ranked candidate if the automatic selection is not the most relevant toxicology basis."
+                ],
+            )
+        )
+
+    if selected_basis_mg_per_kg_day is not None:
+        basis_formula = (
+            "HED basis = normalized basis × (Km_animal / Km_human)"
+            if hed_basis_mg_per_kg_day is not None
+            else "Basis = normalized source dose"
+        )
+        calculations.append(
+            LiveWorkspaceDerivedCalculation(
+                key="worksheet_basis",
+                label=selected_basis_label or "Selected worksheet basis",
+                formula=basis_formula,
+                result_text=f"{selected_basis_mg_per_kg_day:.3g} mg/kg/day",
+                unit="mg/kg/day",
+                assumptions=[
+                    "Worksheet basis is recalculated on the server from the selected candidate and the current reviewer assumptions."
+                ],
+            )
+        )
+
+        screening_intake_mg_day = selected_basis_mg_per_kg_day * body_weight_kg
+        calculations.append(
+            LiveWorkspaceDerivedCalculation(
+                key="worksheet_screening_intake",
+                label="Body-weight adjusted screening intake",
+                formula=f"mg/day = mg/kg/day × {body_weight_kg:.3g} kg",
+                result_text=f"{screening_intake_mg_day:.3g} mg/day",
+                unit="mg/day",
+                assumptions=[
+                    "This is a worksheet screening conversion only and not a final PDE/ADE conclusion."
+                ],
+            )
+        )
+
+        uf_adjusted_intake_mg_day = screening_intake_mg_day / uncertainty_factor
+        calculations.append(
+            LiveWorkspaceDerivedCalculation(
+                key="worksheet_uf_adjusted_intake",
+                label="UF-adjusted screening intake",
+                formula=f"UF-adjusted intake = screening intake / {uncertainty_factor:.3g}",
+                result_text=f"{uf_adjusted_intake_mg_day:.3g} mg/day",
+                unit="mg/day",
+                assumptions=[
+                    "Uncertainty factor is reviewer-editable and illustrative until formally curated."
+                ],
+            )
+        )
+
+    if selected_candidate is None and not warnings:
+        warnings.append("No ranked POD candidates are currently available for worksheet screening.")
+
+    return LiveWorkspacePodWorksheet(
+        selected_candidate_index=selected_candidate_index,
+        body_weight_kg=body_weight_kg,
+        uncertainty_factor=uncertainty_factor,
+        use_human_equivalent_dose=use_human_equivalent_dose,
+        reviewer_status=reviewer_status,
+        reviewer_notes=reviewer_notes,
+        selected_candidate=selected_candidate,
+        selected_basis_label=selected_basis_label,
+        selected_basis_mg_per_kg_day=selected_basis_mg_per_kg_day,
+        hed_basis_mg_per_kg_day=hed_basis_mg_per_kg_day,
+        screening_intake_mg_day=screening_intake_mg_day,
+        uf_adjusted_intake_mg_day=uf_adjusted_intake_mg_day,
+        calculations=calculations,
+        warnings=warnings,
+    )
+
+
+def with_pod_worksheet(workspace: LiveWorkspaceResponse) -> LiveWorkspaceResponse:
+    return workspace.model_copy(
+        update={
+            "pod_worksheet": build_pod_worksheet(
+                pod_analysis=workspace.pod_analysis,
+                current_worksheet=workspace.pod_worksheet,
+            )
+        }
+    )
 
 
 def build_pod_analysis(

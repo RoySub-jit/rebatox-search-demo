@@ -91,6 +91,23 @@ class LiveWorkspacePodAnalysis(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class LiveWorkspacePodWorksheet(BaseModel):
+    selected_candidate_index: int | None = Field(default=0, ge=0)
+    body_weight_kg: float = Field(default=50.0, gt=0, le=500)
+    uncertainty_factor: float = Field(default=100.0, ge=1, le=100_000)
+    use_human_equivalent_dose: bool = False
+    reviewer_status: Literal["draft", "reviewed", "accepted", "rejected"] = "draft"
+    reviewer_notes: str | None = Field(default=None, max_length=4000)
+    selected_candidate: LiveWorkspaceDoseCandidate | None = None
+    selected_basis_label: str | None = None
+    selected_basis_mg_per_kg_day: float | None = None
+    hed_basis_mg_per_kg_day: float | None = None
+    screening_intake_mg_day: float | None = None
+    uf_adjusted_intake_mg_day: float | None = None
+    calculations: list[LiveWorkspaceDerivedCalculation] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ResolveLiveWorkspaceRequest(BaseModel):
     entity_type: EntityType
     provider: SourceProviderName
@@ -105,12 +122,19 @@ class LiveWorkspaceResponse(BaseModel):
     sections: list[LiveWorkspaceSection] = Field(default_factory=list)
     extracted_signals: list[LiveWorkspaceExtractedSignal] = Field(default_factory=list)
     pod_analysis: LiveWorkspacePodAnalysis = Field(default_factory=LiveWorkspacePodAnalysis)
+    pod_worksheet: LiveWorkspacePodWorksheet = Field(default_factory=LiveWorkspacePodWorksheet)
     review_cue: LiveWorkspaceReviewCue
     retrieval_mode: Literal["live"] = "live"
     retrieved_at: datetime
 
 
 class SaveLiveWorkspaceRequest(BaseModel):
+    workspace: LiveWorkspaceResponse
+    label: str | None = Field(default=None, max_length=255)
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class UpdateSavedWorkspaceRequest(BaseModel):
     workspace: LiveWorkspaceResponse
     label: str | None = Field(default=None, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)

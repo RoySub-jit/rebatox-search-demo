@@ -5,8 +5,8 @@ export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
 import { PageIntro } from "@/components/page-intro";
+import { PodWorksheetPanel } from "@/components/pod-worksheet-panel";
 import { StatusBadge } from "@/components/status-badge";
-import { WorkspaceSavePanel } from "@/components/workspace-save-panel";
 import {
   ApiClientError,
   getSavedWorkspace,
@@ -146,6 +146,17 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     const podCurationRows = buildPodCurationRows(workspace);
     const backToSearchHref = buildBackToSearchHref(entityType, activeQuery);
     const workspaceStateLabel = savedWorkspace ? "Saved reviewer snapshot" : "Live source workspace";
+    const worksheetCandidate =
+      workspace.pod_worksheet.selected_candidate ?? workspace.pod_analysis.primary_candidate;
+    const worksheetWarnings = workspace.pod_worksheet.warnings;
+    const worksheetCalculations = workspace.pod_worksheet.calculations;
+    const otherCandidates =
+      workspace.pod_analysis.candidates.filter((_, index) => {
+        if (workspace.pod_worksheet.selected_candidate_index === null) {
+          return index > 0;
+        }
+        return index !== workspace.pod_worksheet.selected_candidate_index;
+      });
 
     return (
       <div className="page-stack">
@@ -350,77 +361,78 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
         <section className="card">
           <div className="card-heading">
             <div>
-              <h2>POD derivation and screening math</h2>
+              <h2>Formal POD worksheet</h2>
               <p className="empty-copy">
-                RebaTox now separates raw extraction from a curation-grade POD pass by
-                selecting the strongest dose-bearing candidate and showing the screening
-                equations that can be derived from the current source.
+                RebaTox separates raw extraction from reviewer curation by letting
+                you persist an explicit worksheet state over the selected candidate,
+                body-weight basis, and uncertainty-factor assumptions.
               </p>
             </div>
             <StatusBadge
               tone={
-                workspace.pod_analysis.primary_candidate ? "success" : "warning"
+                worksheetCandidate ? "success" : "warning"
               }
             >
-              {workspace.pod_analysis.primary_candidate
-                ? "Candidate selected"
-                : "No candidate selected"}
+              {worksheetCandidate ? "Worksheet candidate selected" : "No candidate selected"}
             </StatusBadge>
           </div>
 
-          {workspace.pod_analysis.primary_candidate ? (
+          {worksheetCandidate ? (
             <div className="study-card-stack">
               <article className="study-card">
                 <div className="study-card-copy">
-                  <h3>Primary POD candidate</h3>
-                  <p>{workspace.pod_analysis.primary_candidate.sentence}</p>
+                  <h3>Selected worksheet candidate</h3>
+                  <p>{worksheetCandidate.sentence}</p>
                 </div>
                 <div className="descriptor-list">
                   <div className="descriptor-row">
                     <span className="overview-label">Dose</span>
-                    <strong>{workspace.pod_analysis.primary_candidate.dose_text}</strong>
+                    <strong>{worksheetCandidate.dose_text}</strong>
                   </div>
                   <div className="descriptor-row">
-                    <span className="overview-label">Normalized basis</span>
+                    <span className="overview-label">Worksheet basis</span>
                     <strong>
-                      {workspace.pod_analysis.primary_candidate.normalized_mg_per_kg_day !==
-                      null
-                        ? `${workspace.pod_analysis.primary_candidate.normalized_mg_per_kg_day.toPrecision(3)} mg/kg/day`
+                      {workspace.pod_worksheet.selected_basis_mg_per_kg_day !== null
+                        ? `${workspace.pod_worksheet.selected_basis_mg_per_kg_day.toPrecision(3)} mg/kg/day`
                         : "Not normalized"}
                     </strong>
                   </div>
                   <div className="descriptor-row">
                     <span className="overview-label">POD basis</span>
                     <strong>
-                      {workspace.pod_analysis.primary_candidate.pod_term ??
-                        "Contextual dose cue"}
+                      {worksheetCandidate.pod_term ?? "Contextual dose cue"}
                     </strong>
                   </div>
                   <div className="descriptor-row">
                     <span className="overview-label">Species / model</span>
                     <strong>
-                      {workspace.pod_analysis.primary_candidate.species ??
-                        "Not inferred"}
+                      {worksheetCandidate.species ?? "Not inferred"}
                     </strong>
                   </div>
                   <div className="descriptor-row">
                     <span className="overview-label">Route / duration</span>
                     <strong>
-                      {workspace.pod_analysis.primary_candidate.route ??
-                        "Route not inferred"}
-                      {workspace.pod_analysis.primary_candidate.duration
-                        ? ` · ${workspace.pod_analysis.primary_candidate.duration}`
+                      {worksheetCandidate.route ?? "Route not inferred"}
+                      {worksheetCandidate.duration
+                        ? ` · ${worksheetCandidate.duration}`
                         : ""}
                     </strong>
                   </div>
                   <div className="descriptor-row">
-                    <span className="overview-label">Candidate confidence</span>
-                    <strong>{workspace.pod_analysis.primary_candidate.confidence}</strong>
+                    <span className="overview-label">Reviewer status</span>
+                    <strong>{workspace.pod_worksheet.reviewer_status}</strong>
+                  </div>
+                  <div className="descriptor-row">
+                    <span className="overview-label">Body weight / UF</span>
+                    <strong>
+                      {workspace.pod_worksheet.body_weight_kg.toPrecision(3)} kg · UF{" "}
+                      {workspace.pod_worksheet.uncertainty_factor.toPrecision(3)}
+                    </strong>
                   </div>
                 </div>
-                {workspace.pod_analysis.primary_candidate.normalization_note ? (
+                {worksheetCandidate.normalization_note ? (
                   <p className="empty-copy">
-                    {workspace.pod_analysis.primary_candidate.normalization_note}
+                    {worksheetCandidate.normalization_note}
                   </p>
                 ) : null}
               </article>
@@ -438,9 +450,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             </div>
           )}
 
-          {workspace.pod_analysis.derived_calculations.length > 0 ? (
+          {worksheetCalculations.length > 0 ? (
             <div className="pod-calculation-grid">
-              {workspace.pod_analysis.derived_calculations.map((item) => (
+              {worksheetCalculations.map((item) => (
                 <article key={item.key} className="pod-calculation-card">
                   <span className="overview-label">{item.label}</span>
                   <strong>{item.result_text}</strong>
@@ -457,19 +469,19 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             </div>
           ) : null}
 
-          {workspace.pod_analysis.candidates.length > 1 ? (
+          {otherCandidates.length > 0 ? (
             <div className="study-card-stack">
               <article className="study-card">
                 <div className="study-card-copy">
                   <h3>Other ranked candidates</h3>
                   <p>
-                    RebaTox ranked additional dose-bearing candidates below the primary
-                    selection so a reviewer can compare alternate POD cues before making a
-                    final judgment.
+                    RebaTox ranked additional dose-bearing candidates below the current
+                    worksheet selection so a reviewer can compare alternate POD cues
+                    before making a final judgment.
                   </p>
                 </div>
                 <div className="descriptor-list">
-                  {workspace.pod_analysis.candidates.slice(1).map((candidate, index) => (
+                  {otherCandidates.map((candidate, index) => (
                     <div
                       key={`${candidate.dose_text}-${candidate.sentence}-${index}`}
                       className="descriptor-row"
@@ -490,9 +502,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             </div>
           ) : null}
 
-          {workspace.pod_analysis.warnings.length > 0 ? (
+          {worksheetWarnings.length > 0 ? (
             <div className="pod-warning-stack">
-              {workspace.pod_analysis.warnings.map((warning, index) => (
+              {worksheetWarnings.map((warning, index) => (
                 <article key={`pod-warning-${index}`} className="pod-warning-card">
                   <StatusBadge tone="warning">POD review note</StatusBadge>
                   <p>{warning}</p>
@@ -560,35 +572,11 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
           )}
         </section>
 
-        {savedWorkspace ? (
-          <section className="card">
-            <div className="card-heading">
-              <div>
-                <h2>Saved snapshot details</h2>
-                <p className="empty-copy">
-                  This workspace was persisted from a live retrieval so the same review
-                  snapshot can be reopened later.
-                </p>
-              </div>
-            </div>
-            <div className="descriptor-list">
-              <div className="descriptor-row">
-                <span className="overview-label">Saved workspace id</span>
-                <strong>{savedWorkspace.id}</strong>
-              </div>
-              <div className="descriptor-row">
-                <span className="overview-label">Label</span>
-                <strong>{savedWorkspace.label}</strong>
-              </div>
-              <div className="descriptor-row">
-                <span className="overview-label">Saved at</span>
-                <strong>{formatPublishedAt(savedWorkspace.saved_at)}</strong>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <WorkspaceSavePanel apiBaseUrl={appConfig.apiBaseUrl} workspace={workspace} />
-        )}
+        <PodWorksheetPanel
+          apiBaseUrl={appConfig.apiBaseUrl}
+          workspace={workspace}
+          savedWorkspace={savedWorkspace}
+        />
 
         <section className="card">
           <div className="card-heading">

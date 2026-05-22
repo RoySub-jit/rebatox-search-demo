@@ -166,6 +166,23 @@ export type LiveWorkspacePodAnalysisResponse = {
   warnings: string[];
 };
 
+export type LiveWorkspacePodWorksheetResponse = {
+  selected_candidate_index: number | null;
+  body_weight_kg: number;
+  uncertainty_factor: number;
+  use_human_equivalent_dose: boolean;
+  reviewer_status: "draft" | "reviewed" | "accepted" | "rejected";
+  reviewer_notes: string | null;
+  selected_candidate: LiveWorkspaceDoseCandidateResponse | null;
+  selected_basis_label: string | null;
+  selected_basis_mg_per_kg_day: number | null;
+  hed_basis_mg_per_kg_day: number | null;
+  screening_intake_mg_day: number | null;
+  uf_adjusted_intake_mg_day: number | null;
+  calculations: LiveWorkspaceDerivedCalculationResponse[];
+  warnings: string[];
+};
+
 export type LiveWorkspaceResponse = {
   entity_type: SearchEntityType;
   query: string | null;
@@ -173,6 +190,7 @@ export type LiveWorkspaceResponse = {
   sections: LiveWorkspaceSectionResponse[];
   extracted_signals: LiveWorkspaceExtractedSignalResponse[];
   pod_analysis: LiveWorkspacePodAnalysisResponse;
+  pod_worksheet: LiveWorkspacePodWorksheetResponse;
   review_cue: {
     title: string;
     description: string;
@@ -608,6 +626,25 @@ export function saveLiveWorkspace(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function updateSavedWorkspace(
+  apiBaseUrl: string,
+  workspaceId: number,
+  payload: {
+    workspace: LiveWorkspaceResponse;
+    label?: string | null;
+    notes?: string | null;
+  },
+) {
+  return requestJson<SavedWorkspaceResponse>(
+    apiBaseUrl,
+    `/api/v1/workspaces/${workspaceId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function getSavedWorkspace(apiBaseUrl: string, workspaceId: number) {

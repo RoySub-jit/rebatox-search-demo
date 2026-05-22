@@ -18,6 +18,7 @@ from app.services.live_search.dailymed import (
     search_dailymed_records,
 )
 from app.services.live_search.echa import resolve_echa_workspace, search_echa_records
+from app.services.live_search.pod_analysis import with_pod_worksheet
 from app.services.live_search.openfda import (
     resolve_openfda_workspace,
     search_openfda_records,
@@ -263,35 +264,40 @@ def resolve_live_workspace(
 
     def load_workspace() -> LiveWorkspaceResponse:
         if provider == "openfda":
-            return resolve_openfda_workspace(
+            workspace = resolve_openfda_workspace(
                 entity_type=request.entity_type,
                 external_id=request.external_id,
                 query=request.query,
             )
+            return with_pod_worksheet(workspace)
         if provider == "dailymed":
-            return resolve_dailymed_workspace(
+            workspace = resolve_dailymed_workspace(
                 entity_type=request.entity_type,
                 external_id=request.external_id,
                 query=request.query,
             )
+            return with_pod_worksheet(workspace)
         if provider == "pubchem":
-            return resolve_pubchem_workspace(
+            workspace = resolve_pubchem_workspace(
                 entity_type=request.entity_type,
                 external_id=request.external_id,
                 query=request.query,
             )
+            return with_pod_worksheet(workspace)
         if provider == "pubmed":
-            return resolve_pubmed_workspace(
+            workspace = resolve_pubmed_workspace(
                 entity_type=request.entity_type,
                 external_id=request.external_id,
                 query=request.query,
             )
+            return with_pod_worksheet(workspace)
         if provider == "echa":
-            return resolve_echa_workspace(
+            workspace = resolve_echa_workspace(
                 entity_type=request.entity_type,
                 external_id=request.external_id,
                 query=request.query,
             )
+            return with_pod_worksheet(workspace)
 
         raise ValueError(f"Provider '{provider}' is not yet supported for live workspaces.")
 

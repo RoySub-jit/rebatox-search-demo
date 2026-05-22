@@ -10,11 +10,15 @@ from app.schemas.live_search import (
     SavedWorkspaceListItem,
     SavedWorkspaceListResponse,
     SavedWorkspaceResponse,
+    UpdateSavedWorkspaceRequest,
 )
+from app.services.live_search.pod_analysis import with_pod_worksheet
 
 
 def _saved_workspace_to_response(saved_workspace: SavedWorkspace) -> SavedWorkspaceResponse:
-    workspace = LiveWorkspaceResponse.model_validate(saved_workspace.snapshot_json)
+    workspace = with_pod_worksheet(
+        LiveWorkspaceResponse.model_validate(saved_workspace.snapshot_json)
+    )
     return SavedWorkspaceResponse(
         id=saved_workspace.id,
         label=saved_workspace.label,
@@ -33,7 +37,7 @@ def save_workspace_snapshot(
     db: Session,
     payload: SaveLiveWorkspaceRequest,
 ) -> SavedWorkspaceResponse:
-    workspace = payload.workspace
+    workspace = with_pod_worksheet(payload.workspace)
     saved_workspace = SavedWorkspace(
         label=payload.label or workspace.record.title,
         notes=payload.notes,
@@ -43,6 +47,30 @@ def save_workspace_snapshot(
         query=workspace.query,
         snapshot_json=workspace.model_dump(mode="json"),
     )
+    db.add(saved_workspace)
+    db.commit()
+    db.refresh(saved_workspace)
+    return _saved_workspace_to_response(saved_workspace)
+
+
+def update_saved_workspace(
+    *,
+    db: Session,
+    workspace_id: int,
+    payload: UpdateSavedWorkspaceRequest,
+) -> SavedWorkspaceResponse:
+    saved_workspace = db.get(SavedWorkspace, workspace_id)
+    if saved_workspace is None:
+        raise LookupError(f"No saved workspace was found for id '{workspace_id}'.")
+
+    workspace = with_pod_worksheet(payload.workspace)
+    saved_workspace.label = payload.label or saved_workspace.label or workspace.record.title
+    saved_workspace.notes = payload.notes if payload.notes is not None else saved_workspace.notes
+    saved_workspace.entity_type = workspace.entity_type
+    saved_workspace.provider = workspace.record.provider
+    saved_workspace.external_id = workspace.record.external_id
+    saved_workspace.query = workspace.query
+    saved_workspace.snapshot_json = workspace.model_dump(mode="json")
     db.add(saved_workspace)
     db.commit()
     db.refresh(saved_workspace)
@@ -63,7 +91,9 @@ def list_saved_workspaces(
 
     items = []
     for saved_workspace in saved_workspaces:
-        workspace = LiveWorkspaceResponse.model_validate(saved_workspace.snapshot_json)
+        workspace = with_pod_worksheet(
+            LiveWorkspaceResponse.model_validate(saved_workspace.snapshot_json)
+        )
         items.append(
             SavedWorkspaceListItem(
                 id=saved_workspace.id,
